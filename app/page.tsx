@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
 type AndamentoItem = {
@@ -133,6 +134,12 @@ function Modal({
 }
 
 export default function Home() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [carregandoSessao, setCarregandoSessao] = useState(true);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginSenha, setLoginSenha] = useState("");
+  const [carregandoLogin, setCarregandoLogin] = useState(false);
+
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [rescisoes, setRescisoes] = useState<Rescisao[]>([]);
   const [rescisaoSelecionada, setRescisaoSelecionada] =
@@ -154,6 +161,37 @@ export default function Home() {
   const [form, setForm] = useState(formInicial);
   const [abaPagamento, setAbaPagamento] = useState("Todas");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
+
+  async function entrar() {
+    if (!loginEmail.trim() || !loginSenha.trim()) {
+      alert("Informe o email e a senha.");
+      return;
+    }
+
+    setCarregandoLogin(true);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail.trim(),
+      password: loginSenha,
+    });
+
+    setCarregandoLogin(false);
+
+    if (error) {
+      alert(error.message);
+    }
+  }
+
+  async function sair() {
+    await supabase.auth.signOut();
+    setSession(null);
+    setRescisoes([]);
+    setChecklistPadrao([]);
+    setMostrarFormulario(false);
+    setRescisaoSelecionada(null);
+    setRescisaoAndamento(null);
+    setRescisaoObservacao(null);
+  }
 
   function formatarData(data: Date) {
     const ano = data.getFullYear();
@@ -598,15 +636,108 @@ export default function Home() {
   }
 
   useEffect(() => {
-    carregarRescisoes();
-    carregarChecklistPadrao();
+    async function verificarSessao() {
+      const { data } = await supabase.auth.getSession();
+
+      setSession(data.session);
+      setCarregandoSessao(false);
+
+      if (data.session) {
+        carregarRescisoes();
+        carregarChecklistPadrao();
+      }
+    }
+
+    verificarSessao();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, novaSessao) => {
+      setSession(novaSessao);
+
+      if (novaSessao) {
+        carregarRescisoes();
+        carregarChecklistPadrao();
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  if (carregandoSessao) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
+        <p className="text-zinc-400">Carregando...</p>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
+        <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-8 shadow-2xl">
+          <h1 className="text-3xl font-bold">Login</h1>
+          <p className="mt-2 text-zinc-400">
+            Acesse o Sistema de Controle de Rescisões
+          </p>
+
+          <div className="mt-6 space-y-4">
+            <div>
+              <label className="mb-1 block text-sm text-zinc-400">Email</label>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-zinc-400">Senha</label>
+              <input
+                type="password"
+                value={loginSenha}
+                onChange={(e) => setLoginSenha(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") entrar();
+                }}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <button
+              onClick={entrar}
+              disabled={carregandoLogin}
+              className="w-full rounded-lg bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {carregandoLogin ? "Entrando..." : "Entrar"}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-black p-8 text-white">
       <div className="mx-auto w-full max-w-[95vw]">
-        <h1 className="text-4xl font-bold">Sistema de Controle de Rescisões</h1>
-        <p className="mt-2 text-zinc-400">Bem-vindo ao sistema, Rennan.</p>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold">
+              Sistema de Controle de Rescisões
+            </h1>
+            <p className="mt-2 text-zinc-400">Bem-vindo ao sistema, Rennan.</p>
+          </div>
+
+          <button
+            onClick={sair}
+            className="rounded-lg bg-red-600 px-5 py-3 font-bold text-white hover:bg-red-700"
+          >
+            Sair
+          </button>
+        </div>
 
         <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
           {statusOpcoes.map((status) => (
