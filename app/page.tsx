@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import { supabase } from "./supabase";
 
 type AndamentoItem = {
@@ -136,6 +138,8 @@ function Modal({
 }
 
 export default function Home() {
+  const relatorioPDFRef = useRef<HTMLDivElement | null>(null);
+
   const [session, setSession] = useState<Session | null>(null);
   const [carregandoSessao, setCarregandoSessao] = useState(true);
   const [loginEmail, setLoginEmail] = useState("");
@@ -150,6 +154,7 @@ export default function Home() {
   const [rescisaoAndamento, setRescisaoAndamento] =
     useState<Rescisao | null>(null);
   const [andamentoTemp, setAndamentoTemp] = useState<AndamentoItem[]>([]);
+  const [novoItemIndividual, setNovoItemIndividual] = useState("");
 
   const [rescisaoObservacao, setRescisaoObservacao] =
     useState<Rescisao | null>(null);
@@ -370,6 +375,39 @@ export default function Home() {
 
   const totalGeralRelatorio = totalLiquidoRelatorio + totalFgtsRelatorio;
 
+  async function gerarPDFRelatorio() {
+    if (!relatorioPDFRef.current) return;
+
+    const canvas = await html2canvas(relatorioPDFRef.current, {
+      scale: 2,
+      backgroundColor: "#18181b",
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+
+    const pdf = new jsPDF("p", "mm", "a4");
+    const larguraPdf = 210;
+    const alturaPdf = 297;
+    const margem = 8;
+    const larguraUtil = larguraPdf - margem * 2;
+    const alturaImg = (canvas.height * larguraUtil) / canvas.width;
+
+    let alturaRestante = alturaImg;
+    let posicaoY = margem;
+
+    pdf.addImage(imgData, "PNG", margem, posicaoY, larguraUtil, alturaImg);
+    alturaRestante -= alturaPdf;
+
+    while (alturaRestante > 0) {
+      pdf.addPage();
+      posicaoY = alturaRestante - alturaImg + margem;
+      pdf.addImage(imgData, "PNG", margem, posicaoY, larguraUtil, alturaImg);
+      alturaRestante -= alturaPdf;
+    }
+
+    pdf.save("relatorio-de-pagamentos.pdf");
+  }
+
   async function carregarRescisoes() {
     const { data, error } = await supabase
       .from("rescisoes")
@@ -573,6 +611,7 @@ export default function Home() {
 
   function abrirAndamento(rescisao: Rescisao) {
     setRescisaoAndamento(rescisao);
+    setNovoItemIndividual("");
 
     const listaAtual = Array.isArray(rescisao.andamento)
       ? rescisao.andamento
@@ -604,6 +643,28 @@ export default function Home() {
         maximumFractionDigits: 2,
       })
     );
+  }
+
+  function adicionarItemIndividual() {
+    if (!novoItemIndividual.trim()) return;
+
+    setAndamentoTemp([
+      ...andamentoTemp,
+      {
+        titulo: novoItemIndividual.trim(),
+        feito: false,
+      },
+    ]);
+
+    setNovoItemIndividual("");
+  }
+
+  function removerItemAndamento(index: number) {
+    const confirmar = confirm("Deseja remover este item do checklist?");
+    if (!confirmar) return;
+
+    const novaLista = andamentoTemp.filter((_, i) => i !== index);
+    setAndamentoTemp(novaLista);
   }
 
   function marcarItemAndamento(index: number) {
@@ -643,6 +704,7 @@ export default function Home() {
 
     setRescisaoAndamento(null);
     setAndamentoTemp([]);
+    setNovoItemIndividual("");
     carregarRescisoes();
   }
 
@@ -1271,7 +1333,7 @@ export default function Home() {
         {mostrarRelatorio && (
           <Modal onClose={() => setMostrarRelatorio(false)}>
             <div className="rounded-xl border border-emerald-700 bg-zinc-900 p-6">
-              <div className="mb-6 flex items-center justify-between">
+              <div className="mb-6 flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-bold text-emerald-400">
                     Relatório de Pagamentos
@@ -1281,97 +1343,117 @@ export default function Home() {
                   </p>
                 </div>
 
-                <button
-                  onClick={() => setMostrarRelatorio(false)}
-                  className="rounded-lg bg-red-600 px-4 py-2 font-bold hover:bg-red-700"
-                >
-                  Fechar
-                </button>
-              </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={gerarPDFRelatorio}
+                    className="rounded-lg bg-blue-600 px-4 py-2 font-bold hover:bg-blue-700"
+                  >
+                    Gerar PDF
+                  </button>
 
-              <div className="mb-6">
-                <label className="mb-2 block text-sm font-bold text-zinc-400">
-                  Filtrar relatório
-                </label>
-
-                <select
-                  value={abaRelatorio}
-                  onChange={(e) => setAbaRelatorio(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-emerald-500"
-                >
-                  {abasPagamento.map((aba) => (
-                    <option key={aba.chave} value={aba.chave}>
-                      {aba.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-                  <p className="text-sm text-zinc-400">Rescisão</p>
-                  <p className="mt-2 text-2xl font-bold text-blue-400">
-                    {formatarMoeda(totalLiquidoRelatorio)}
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-                  <p className="text-sm text-zinc-400">Total FGTS</p>
-                  <p className="mt-2 text-2xl font-bold text-yellow-400">
-                    {formatarMoeda(totalFgtsRelatorio)}
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-                  <p className="text-sm text-zinc-400">Total geral pago</p>
-                  <p className="mt-2 text-2xl font-bold text-emerald-400">
-                    {formatarMoeda(totalGeralRelatorio)}
-                  </p>
+                  <button
+                    onClick={() => setMostrarRelatorio(false)}
+                    className="rounded-lg bg-red-600 px-4 py-2 font-bold hover:bg-red-700"
+                  >
+                    Fechar
+                  </button>
                 </div>
               </div>
 
-              <div className="mt-6 overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-zinc-800 text-left">
-                      <th className="p-4">Matrícula</th>
-                      <th className="p-4">Nome</th>
-                      <th className="p-4">Pagamento</th>
-                      <th className="p-4">Líquido</th>
-                      <th className="p-4">FGTS</th>
-                      <th className="p-4">Total</th>
-                    </tr>
-                  </thead>
+              <div ref={relatorioPDFRef} className="rounded-xl bg-zinc-900 p-4">
+                <h2 className="text-2xl font-bold text-emerald-400">
+                  Relatório de Pagamentos
+                </h2>
+                <p className="mb-6 text-zinc-400">
+                  Totais por mês de pagamento ou geral
+                </p>
 
-                  <tbody>
-                    {rescisoesRelatorio.map((r) => (
-                      <tr
-                        key={r.id}
-                        className="border-b border-zinc-800 hover:bg-zinc-800"
-                      >
-                        <td className="p-4">{r.matricula}</td>
-                        <td className="p-4">{r.Nome}</td>
-                        <td className="p-4">{r.prazo_pagamento || "-"}</td>
-                        <td className="p-4">
-                          {formatarMoeda(r.valor_liquido)}
-                        </td>
-                        <td className="p-4">{formatarMoeda(r.valor_fgts)}</td>
-                        <td className="p-4 font-bold text-emerald-400">
-                          {formatarMoeda(
-                            Number(r.valor_liquido || 0) +
-                              Number(r.valor_fgts || 0)
-                          )}
-                        </td>
-                      </tr>
+                <div className="mb-6">
+                  <label className="mb-2 block text-sm font-bold text-zinc-400">
+                    Filtrar relatório
+                  </label>
+
+                  <select
+                    value={abaRelatorio}
+                    onChange={(e) => setAbaRelatorio(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-emerald-500"
+                  >
+                    {abasPagamento.map((aba) => (
+                      <option key={aba.chave} value={aba.chave}>
+                        {aba.nome}
+                      </option>
                     ))}
-                  </tbody>
-                </table>
+                  </select>
+                </div>
 
-                {rescisoesRelatorio.length === 0 && (
-                  <p className="mt-4 text-center text-zinc-500">
-                    Nenhuma rescisão encontrada neste relatório.
-                  </p>
-                )}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+                    <p className="text-sm text-zinc-400">Rescisão</p>
+                    <p className="mt-2 text-2xl font-bold text-blue-400">
+                      {formatarMoeda(totalLiquidoRelatorio)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+                    <p className="text-sm text-zinc-400">Total FGTS</p>
+                    <p className="mt-2 text-2xl font-bold text-yellow-400">
+                      {formatarMoeda(totalFgtsRelatorio)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+                    <p className="text-sm text-zinc-400">Total geral pago</p>
+                    <p className="mt-2 text-2xl font-bold text-emerald-400">
+                      {formatarMoeda(totalGeralRelatorio)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-zinc-800 text-left">
+                        <th className="p-4">Matrícula</th>
+                        <th className="p-4">Nome</th>
+                        <th className="p-4">Pagamento</th>
+                        <th className="p-4">Líquido</th>
+                        <th className="p-4">FGTS</th>
+                        <th className="p-4">Total</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {rescisoesRelatorio.map((r) => (
+                        <tr
+                          key={r.id}
+                          className="border-b border-zinc-800 hover:bg-zinc-800"
+                        >
+                          <td className="p-4">{r.matricula}</td>
+                          <td className="p-4">{r.Nome}</td>
+                          <td className="p-4">{r.prazo_pagamento || "-"}</td>
+                          <td className="p-4">
+                            {formatarMoeda(r.valor_liquido)}
+                          </td>
+                          <td className="p-4">
+                            {formatarMoeda(r.valor_fgts)}
+                          </td>
+                          <td className="p-4 font-bold text-emerald-400">
+                            {formatarMoeda(
+                              Number(r.valor_liquido || 0) +
+                                Number(r.valor_fgts || 0)
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {rescisoesRelatorio.length === 0 && (
+                    <p className="mt-4 text-center text-zinc-500">
+                      Nenhuma rescisão encontrada neste relatório.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </Modal>
@@ -1398,6 +1480,25 @@ export default function Home() {
                 </button>
               </div>
 
+              <div className="mb-4 flex flex-wrap gap-2">
+                <input
+                  value={novoItemIndividual}
+                  onChange={(e) => setNovoItemIndividual(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") adicionarItemIndividual();
+                  }}
+                  placeholder="Adicionar item específico para este funcionário"
+                  className="min-w-[260px] flex-1 rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-purple-500"
+                />
+
+                <button
+                  onClick={adicionarItemIndividual}
+                  className="rounded-lg bg-green-600 px-4 py-2 font-bold hover:bg-green-700"
+                >
+                  Adicionar item
+                </button>
+              </div>
+
               <div className="space-y-3">
                 {andamentoTemp.length === 0 && (
                   <p className="text-zinc-500">
@@ -1408,7 +1509,7 @@ export default function Home() {
                 {andamentoTemp.map((item, index) => (
                   <div
                     key={index}
-                    className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-4"
                   >
                     <label className="flex cursor-pointer items-center gap-3">
                       <input
@@ -1428,6 +1529,13 @@ export default function Home() {
                         {item.titulo}
                       </span>
                     </label>
+
+                    <button
+                      onClick={() => removerItemAndamento(index)}
+                      className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold hover:bg-red-700"
+                    >
+                      Remover
+                    </button>
                   </div>
                 ))}
               </div>
