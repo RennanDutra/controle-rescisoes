@@ -44,6 +44,8 @@ type Rescisao = {
   homologacao: string;
   status: string;
   observacao?: string;
+  valor_liquido?: number;
+  valor_fgts?: number;
   andamento?: AndamentoItem[];
 };
 
@@ -153,6 +155,13 @@ export default function Home() {
     useState<Rescisao | null>(null);
   const [observacaoTemp, setObservacaoTemp] = useState("");
 
+  const [rescisaoValores, setRescisaoValores] = useState<Rescisao | null>(null);
+  const [valorLiquidoTemp, setValorLiquidoTemp] = useState("");
+  const [valorFgtsTemp, setValorFgtsTemp] = useState("");
+
+  const [mostrarRelatorio, setMostrarRelatorio] = useState(false);
+  const [abaRelatorio, setAbaRelatorio] = useState("Todas");
+
   const [checklistPadrao, setChecklistPadrao] = useState<ChecklistPadrao[]>([]);
   const [novoItemPadrao, setNovoItemPadrao] = useState("");
   const [mostrarConfigChecklist, setMostrarConfigChecklist] = useState(false);
@@ -192,6 +201,8 @@ export default function Home() {
     setRescisaoSelecionada(null);
     setRescisaoAndamento(null);
     setRescisaoObservacao(null);
+    setRescisaoValores(null);
+    setMostrarRelatorio(false);
   }
 
   function formatarData(data: Date) {
@@ -199,6 +210,28 @@ export default function Home() {
     const mes = String(data.getMonth() + 1).padStart(2, "0");
     const dia = String(data.getDate()).padStart(2, "0");
     return `${ano}-${mes}-${dia}`;
+  }
+
+  function formatarMoeda(valor: any) {
+    const numero = Number(valor || 0);
+
+    return numero.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  }
+
+  function converterValor(valor: string) {
+    if (!valor.trim()) return 0;
+
+    const limpo = valor
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .replace(/[^\d.-]/g, "");
+
+    const numero = Number(limpo);
+
+    return isNaN(numero) ? 0 : numero;
   }
 
   function ehFimDeSemana(data: Date) {
@@ -318,6 +351,25 @@ export default function Home() {
     return nome.includes(termoBusca) || matricula.includes(termoBusca);
   });
 
+  const rescisoesRelatorio =
+    abaRelatorio === "Todas"
+      ? rescisoes
+      : abaRelatorio === "Sem pagamento"
+      ? rescisoes.filter((r) => !r.prazo_pagamento)
+      : rescisoes.filter((r) => r.prazo_pagamento?.startsWith(abaRelatorio));
+
+  const totalLiquidoRelatorio = rescisoesRelatorio.reduce(
+    (total, r) => total + Number(r.valor_liquido || 0),
+    0
+  );
+
+  const totalFgtsRelatorio = rescisoesRelatorio.reduce(
+    (total, r) => total + Number(r.valor_fgts || 0),
+    0
+  );
+
+  const totalGeralRelatorio = totalLiquidoRelatorio + totalFgtsRelatorio;
+
   async function carregarRescisoes() {
     const { data, error } = await supabase
       .from("rescisoes")
@@ -415,6 +467,8 @@ export default function Home() {
       salario: form.salario === "" ? null : Number(form.salario),
       status: "Pendente",
       andamento: gerarChecklistPadrao(),
+      valor_liquido: 0,
+      valor_fgts: 0,
     };
 
     const { error } = await supabase.from("rescisoes").insert(dados);
@@ -512,6 +566,7 @@ export default function Home() {
     if (rescisaoSelecionada?.id === id) setRescisaoSelecionada(null);
     if (rescisaoAndamento?.id === id) setRescisaoAndamento(null);
     if (rescisaoObservacao?.id === id) setRescisaoObservacao(null);
+    if (rescisaoValores?.id === id) setRescisaoValores(null);
 
     carregarRescisoes();
   }
@@ -533,6 +588,22 @@ export default function Home() {
   function abrirObservacao(rescisao: Rescisao) {
     setRescisaoObservacao(rescisao);
     setObservacaoTemp(rescisao.observacao || "");
+  }
+
+  function abrirValores(rescisao: Rescisao) {
+    setRescisaoValores(rescisao);
+    setValorLiquidoTemp(
+      Number(rescisao.valor_liquido || 0).toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    );
+    setValorFgtsTemp(
+      Number(rescisao.valor_fgts || 0).toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    );
   }
 
   function marcarItemAndamento(index: number) {
@@ -592,6 +663,31 @@ export default function Home() {
 
     setRescisaoObservacao(null);
     setObservacaoTemp("");
+    carregarRescisoes();
+  }
+
+  async function salvarValores() {
+    if (!rescisaoValores?.id) return;
+
+    const valorLiquido = converterValor(valorLiquidoTemp);
+    const valorFgts = converterValor(valorFgtsTemp);
+
+    const { error } = await supabase
+      .from("rescisoes")
+      .update({
+        valor_liquido: valorLiquido,
+        valor_fgts: valorFgts,
+      })
+      .eq("id", rescisaoValores.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setRescisaoValores(null);
+    setValorLiquidoTemp("");
+    setValorFgtsTemp("");
     carregarRescisoes();
   }
 
@@ -789,6 +885,16 @@ export default function Home() {
           >
             Configurar Checklist
           </button>
+
+          <button
+            onClick={() => {
+              setAbaRelatorio("Todas");
+              setMostrarRelatorio(true);
+            }}
+            className="rounded-lg bg-emerald-600 px-5 py-3 font-bold text-white hover:bg-emerald-700"
+          >
+            Relatório de Pagamentos
+          </button>
         </div>
 
         {mostrarConfigChecklist && (
@@ -843,6 +949,173 @@ export default function Home() {
             </button>
           </div>
         )}
+
+        <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+          <h2 className="mb-4 text-xl font-bold">Rescisões Cadastradas</h2>
+
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-bold text-zinc-400">
+              Buscar por nome ou matrícula
+            </label>
+
+            <input
+              type="text"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Digite o nome ou matrícula do funcionário..."
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div className="mb-4">
+            <p className="mb-2 text-sm font-bold text-zinc-400">
+              Filtrar por status
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setFiltroStatus("Todos")}
+                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                  filtroStatus === "Todos"
+                    ? "bg-green-600 text-white"
+                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                }`}
+              >
+                Todos
+              </button>
+
+              {statusOpcoes.map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFiltroStatus(status)}
+                  className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                    filtroStatus === status
+                      ? "bg-green-600 text-white"
+                      : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <p className="mb-2 text-sm font-bold text-zinc-400">
+            Filtrar por mês de pagamento
+          </p>
+
+          <div className="mb-6 flex flex-wrap gap-2">
+            {abasPagamento.map((aba) => (
+              <button
+                key={aba.chave}
+                onClick={() => setAbaPagamento(aba.chave)}
+                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                  abaPagamento === aba.chave
+                    ? "bg-blue-600 text-white"
+                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                }`}
+              >
+                {aba.nome} ({aba.total})
+              </button>
+            ))}
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-0 border-collapse">
+              <thead>
+                <tr className="bg-zinc-800 text-left">
+                  <th className="p-4">Empresa</th>
+                  <th className="p-4">Matrícula</th>
+                  <th className="p-4">Nome</th>
+                  <th className="p-4">Demissão</th>
+                  <th className="p-4">Pagamento</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Andamento</th>
+                  <th className="p-4">Valores</th>
+                  <th className="p-4">Ações</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {rescisoesFiltradas.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="border-b border-zinc-800 hover:bg-zinc-800"
+                  >
+                    <td className="p-4">{r.Empresa}</td>
+                    <td className="p-4">{r.matricula}</td>
+                    <td className="p-4">{r.Nome}</td>
+                    <td className="p-4">{r.data_desligamento}</td>
+                    <td className="p-4">{r.prazo_pagamento}</td>
+                    <td className="p-4">
+                      <span className="rounded-full bg-zinc-800 px-3 py-1 text-sm font-bold text-white">
+                        {r.status || "Pendente"}
+                      </span>
+                    </td>
+                    <td className="p-4 font-bold text-blue-400">
+                      {progressoAndamento(r)}
+                    </td>
+                    <td className="p-4 text-sm">
+                      <p>Líquido: {formatarMoeda(r.valor_liquido)}</p>
+                      <p>FGTS: {formatarMoeda(r.valor_fgts)}</p>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => setRescisaoSelecionada(r)}
+                          className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-bold hover:bg-zinc-600"
+                        >
+                          Ver detalhes
+                        </button>
+
+                        <button
+                          onClick={() => abrirAndamento(r)}
+                          className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-bold hover:bg-purple-700"
+                        >
+                          Andamento
+                        </button>
+
+                        <button
+                          onClick={() => abrirValores(r)}
+                          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold hover:bg-emerald-700"
+                        >
+                          Valores
+                        </button>
+
+                        <button
+                          onClick={() => abrirObservacao(r)}
+                          className="rounded-lg bg-yellow-600 px-4 py-2 text-sm font-bold hover:bg-yellow-700"
+                        >
+                          Observação
+                        </button>
+
+                        <button
+                          onClick={() => iniciarEdicao(r)}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold hover:bg-blue-700"
+                        >
+                          Editar
+                        </button>
+
+                        <button
+                          onClick={() => excluirRescisao(r.id)}
+                          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold hover:bg-red-700"
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {rescisoesFiltradas.length === 0 && (
+              <p className="mt-4 text-center text-zinc-500">
+                Nenhuma rescisão encontrada nesta busca ou filtro.
+              </p>
+            )}
+          </div>
+        </div>
 
         {mostrarFormulario && (
           <Modal onClose={cancelarEdicao}>
@@ -928,160 +1201,181 @@ export default function Home() {
           </Modal>
         )}
 
-        <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-          <h2 className="mb-4 text-xl font-bold">Rescisões Cadastradas</h2>
+        {rescisaoValores && (
+          <Modal onClose={() => setRescisaoValores(null)}>
+            <div className="rounded-xl border border-emerald-700 bg-zinc-900 p-6">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-emerald-400">
+                    Valores da Rescisão
+                  </h2>
+                  <p className="text-zinc-400">
+                    {rescisaoValores.Nome} - {rescisaoValores.Empresa}
+                  </p>
+                </div>
 
-          <div className="mb-4">
-            <label className="mb-2 block text-sm font-bold text-zinc-400">
-              Buscar por nome ou matrícula
-            </label>
-
-            <input
-              type="text"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Digite o nome ou matrícula do funcionário..."
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div className="mb-4">
-            <p className="mb-2 text-sm font-bold text-zinc-400">
-              Filtrar por status
-            </p>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setFiltroStatus("Todos")}
-                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                  filtroStatus === "Todos"
-                    ? "bg-green-600 text-white"
-                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                }`}
-              >
-                Todos
-              </button>
-
-              {statusOpcoes.map((status) => (
                 <button
-                  key={status}
-                  onClick={() => setFiltroStatus(status)}
-                  className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                    filtroStatus === status
-                      ? "bg-green-600 text-white"
-                      : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                  }`}
+                  onClick={() => setRescisaoValores(null)}
+                  className="rounded-lg bg-red-600 px-4 py-2 font-bold hover:bg-red-700"
                 >
-                  {status}
+                  Fechar
                 </button>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          <p className="mb-2 text-sm font-bold text-zinc-400">
-            Filtrar por mês de pagamento
-          </p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm text-zinc-400">
+                    Valor líquido da rescisão
+                  </label>
+                  <input
+                    value={valorLiquidoTemp}
+                    onChange={(e) => setValorLiquidoTemp(e.target.value)}
+                    placeholder="Ex: 1.500,00"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-emerald-500"
+                  />
+                </div>
 
-          <div className="mb-6 flex flex-wrap gap-2">
-            {abasPagamento.map((aba) => (
+                <div>
+                  <label className="mb-1 block text-sm text-zinc-400">
+                    Valor do FGTS
+                  </label>
+                  <input
+                    value={valorFgtsTemp}
+                    onChange={(e) => setValorFgtsTemp(e.target.value)}
+                    placeholder="Ex: 800,00"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                <p className="text-sm text-zinc-400">Total desta rescisão</p>
+                <p className="mt-1 text-2xl font-bold text-emerald-400">
+                  {formatarMoeda(
+                    converterValor(valorLiquidoTemp) +
+                      converterValor(valorFgtsTemp)
+                  )}
+                </p>
+              </div>
+
               <button
-                key={aba.chave}
-                onClick={() => setAbaPagamento(aba.chave)}
-                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                  abaPagamento === aba.chave
-                    ? "bg-blue-600 text-white"
-                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                }`}
+                onClick={salvarValores}
+                className="mt-6 rounded-lg bg-green-600 px-5 py-3 font-bold text-white hover:bg-green-700"
               >
-                {aba.nome} ({aba.total})
+                Salvar valores
               </button>
-            ))}
-          </div>
+            </div>
+          </Modal>
+        )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-0 border-collapse">
-              <thead>
-                <tr className="bg-zinc-800 text-left">
-                  <th className="p-4">Empresa</th>
-                  <th className="p-4">Matrícula</th>
-                  <th className="p-4">Nome</th>
-                  <th className="p-4">Demissão</th>
-                  <th className="p-4">Pagamento</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4">Andamento</th>
-                  <th className="p-4">Ações</th>
-                </tr>
-              </thead>
+        {mostrarRelatorio && (
+          <Modal onClose={() => setMostrarRelatorio(false)}>
+            <div className="rounded-xl border border-emerald-700 bg-zinc-900 p-6">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-emerald-400">
+                    Relatório de Pagamentos
+                  </h2>
+                  <p className="text-zinc-400">
+                    Totais por mês de pagamento ou geral
+                  </p>
+                </div>
 
-              <tbody>
-                {rescisoesFiltradas.map((r) => (
-                  <tr
-                    key={r.id}
-                    className="border-b border-zinc-800 hover:bg-zinc-800"
-                  >
-                    <td className="p-4">{r.Empresa}</td>
-                    <td className="p-4">{r.matricula}</td>
-                    <td className="p-4">{r.Nome}</td>
-                    <td className="p-4">{r.data_desligamento}</td>
-                    <td className="p-4">{r.prazo_pagamento}</td>
-                    <td className="p-4">
-                      <span className="rounded-full bg-zinc-800 px-3 py-1 text-sm font-bold text-white">
-                        {r.status || "Pendente"}
-                      </span>
-                    </td>
-                    <td className="p-4 font-bold text-blue-400">
-                      {progressoAndamento(r)}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setRescisaoSelecionada(r)}
-                          className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-bold hover:bg-zinc-600"
-                        >
-                          Ver detalhes
-                        </button>
+                <button
+                  onClick={() => setMostrarRelatorio(false)}
+                  className="rounded-lg bg-red-600 px-4 py-2 font-bold hover:bg-red-700"
+                >
+                  Fechar
+                </button>
+              </div>
 
-                        <button
-                          onClick={() => abrirAndamento(r)}
-                          className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-bold hover:bg-purple-700"
-                        >
-                          Andamento
-                        </button>
+              <div className="mb-6">
+                <label className="mb-2 block text-sm font-bold text-zinc-400">
+                  Filtrar relatório
+                </label>
 
-                        <button
-                          onClick={() => abrirObservacao(r)}
-                          className="rounded-lg bg-yellow-600 px-4 py-2 text-sm font-bold hover:bg-yellow-700"
-                        >
-                          Observação
-                        </button>
+                <select
+                  value={abaRelatorio}
+                  onChange={(e) => setAbaRelatorio(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-emerald-500"
+                >
+                  {abasPagamento.map((aba) => (
+                    <option key={aba.chave} value={aba.chave}>
+                      {aba.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                        <button
-                          onClick={() => iniciarEdicao(r)}
-                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold hover:bg-blue-700"
-                        >
-                          Editar
-                        </button>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+                  <p className="text-sm text-zinc-400">Total líquido</p>
+                  <p className="mt-2 text-2xl font-bold text-blue-400">
+                    {formatarMoeda(totalLiquidoRelatorio)}
+                  </p>
+                </div>
 
-                        <button
-                          onClick={() => excluirRescisao(r.id)}
-                          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold hover:bg-red-700"
-                        >
-                          Excluir
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+                  <p className="text-sm text-zinc-400">Total FGTS</p>
+                  <p className="mt-2 text-2xl font-bold text-yellow-400">
+                    {formatarMoeda(totalFgtsRelatorio)}
+                  </p>
+                </div>
 
-            {rescisoesFiltradas.length === 0 && (
-              <p className="mt-4 text-center text-zinc-500">
-                Nenhuma rescisão encontrada nesta busca ou filtro.
-              </p>
-            )}
-          </div>
-        </div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+                  <p className="text-sm text-zinc-400">Total geral pago</p>
+                  <p className="mt-2 text-2xl font-bold text-emerald-400">
+                    {formatarMoeda(totalGeralRelatorio)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-zinc-800 text-left">
+                      <th className="p-4">Matrícula</th>
+                      <th className="p-4">Nome</th>
+                      <th className="p-4">Pagamento</th>
+                      <th className="p-4">Líquido</th>
+                      <th className="p-4">FGTS</th>
+                      <th className="p-4">Total</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {rescisoesRelatorio.map((r) => (
+                      <tr
+                        key={r.id}
+                        className="border-b border-zinc-800 hover:bg-zinc-800"
+                      >
+                        <td className="p-4">{r.matricula}</td>
+                        <td className="p-4">{r.Nome}</td>
+                        <td className="p-4">{r.prazo_pagamento || "-"}</td>
+                        <td className="p-4">
+                          {formatarMoeda(r.valor_liquido)}
+                        </td>
+                        <td className="p-4">{formatarMoeda(r.valor_fgts)}</td>
+                        <td className="p-4 font-bold text-emerald-400">
+                          {formatarMoeda(
+                            Number(r.valor_liquido || 0) +
+                              Number(r.valor_fgts || 0)
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {rescisoesRelatorio.length === 0 && (
+                  <p className="mt-4 text-center text-zinc-500">
+                    Nenhuma rescisão encontrada neste relatório.
+                  </p>
+                )}
+              </div>
+            </div>
+          </Modal>
+        )}
 
         {rescisaoAndamento && (
           <Modal onClose={() => setRescisaoAndamento(null)}>
@@ -1258,6 +1552,21 @@ export default function Home() {
                 {detalhe("Kit Demissional", rescisaoSelecionada.kit_demissional)}
                 {detalhe("Homologação", rescisaoSelecionada.homologacao)}
                 {detalhe("Status", rescisaoSelecionada.status)}
+                {detalhe(
+                  "Valor líquido",
+                  formatarMoeda(rescisaoSelecionada.valor_liquido)
+                )}
+                {detalhe(
+                  "Valor FGTS",
+                  formatarMoeda(rescisaoSelecionada.valor_fgts)
+                )}
+                {detalhe(
+                  "Total pago",
+                  formatarMoeda(
+                    Number(rescisaoSelecionada.valor_liquido || 0) +
+                      Number(rescisaoSelecionada.valor_fgts || 0)
+                  )
+                )}
 
                 <div className="md:col-span-3">
                   {detalhe("Observação", rescisaoSelecionada.observacao)}
