@@ -291,17 +291,25 @@ export default function Home() {
   }
 
   function criarAbasPagamento() {
+    const listaRescisoes = Array.isArray(rescisoes) ? rescisoes : [];
     const mapa = new Map<string, string>();
 
-    rescisoes.forEach((rescisao) => {
+    listaRescisoes.forEach((rescisao) => {
       if (!rescisao.prazo_pagamento) {
         mapa.set("Sem pagamento", "Sem pagamento");
         return;
       }
 
-      const [ano, mes] = rescisao.prazo_pagamento.split("-");
+      const prazo = String(rescisao.prazo_pagamento);
+      const [ano, mes] = prazo.split("-");
+
+      if (!ano || !mes) {
+        mapa.set("Sem pagamento", "Sem pagamento");
+        return;
+      }
+
       const chave = `${ano}-${mes}`;
-      const nomeMes = meses[Number(mes) - 1];
+      const nomeMes = meses[Number(mes) - 1] || mes;
 
       mapa.set(chave, `${nomeMes}/${ano}`);
     });
@@ -313,15 +321,19 @@ export default function Home() {
     });
 
     return [
-      { chave: "Todas", nome: "Todas", total: rescisoes.length },
+      {
+        chave: "Todas",
+        nome: "Todas",
+        total: listaRescisoes.length,
+      },
       ...abasOrdenadas.map(([chave, nome]) => ({
         chave,
         nome,
         total:
           chave === "Sem pagamento"
-            ? rescisoes.filter((r) => !r.prazo_pagamento).length
-            : rescisoes.filter((r) =>
-                r.prazo_pagamento?.startsWith(chave)
+            ? listaRescisoes.filter((r) => !r.prazo_pagamento).length
+            : listaRescisoes.filter((r) =>
+                String(r.prazo_pagamento || "").startsWith(chave)
               ).length,
       })),
     ];
@@ -334,7 +346,9 @@ export default function Home() {
       ? rescisoes
       : abaPagamento === "Sem pagamento"
       ? rescisoes.filter((r) => !r.prazo_pagamento)
-      : rescisoes.filter((r) => r.prazo_pagamento?.startsWith(abaPagamento));
+      : rescisoes.filter((r) =>
+          String(r.prazo_pagamento || "").startsWith(abaPagamento)
+        );
 
   const rescisoesFiltradasPorStatus =
     filtroStatus === "Todos"
@@ -361,7 +375,9 @@ export default function Home() {
       ? rescisoes
       : abaRelatorio === "Sem pagamento"
       ? rescisoes.filter((r) => !r.prazo_pagamento)
-      : rescisoes.filter((r) => r.prazo_pagamento?.startsWith(abaRelatorio));
+      : rescisoes.filter((r) =>
+          String(r.prazo_pagamento || "").startsWith(abaRelatorio)
+        );
 
   const totalLiquidoRelatorio = rescisoesRelatorio.reduce(
     (total, r) => total + Number(r.valor_liquido || 0),
@@ -413,15 +429,19 @@ export default function Home() {
         else if (classes.includes("text-zinc-500")) el.style.color = "#71717a";
         else if (classes.includes("text-blue-400")) el.style.color = "#60a5fa";
         else if (classes.includes("text-yellow-400")) el.style.color = "#facc15";
-        else if (classes.includes("text-emerald-400")) el.style.color = "#34d399";
-        else if (classes.includes("text-purple-400")) el.style.color = "#c084fc";
+        else if (classes.includes("text-emerald-400"))
+          el.style.color = "#34d399";
         else if (classes.includes("text-white")) el.style.color = "#ffffff";
         else el.style.color = "#ffffff";
 
-        if (classes.includes("bg-zinc-950")) el.style.backgroundColor = "#09090b";
-        else if (classes.includes("bg-zinc-900")) el.style.backgroundColor = "#18181b";
-        else if (classes.includes("bg-zinc-800")) el.style.backgroundColor = "#27272a";
-        else if (classes.includes("bg-black")) el.style.backgroundColor = "#000000";
+        if (classes.includes("bg-zinc-950"))
+          el.style.backgroundColor = "#09090b";
+        else if (classes.includes("bg-zinc-900"))
+          el.style.backgroundColor = "#18181b";
+        else if (classes.includes("bg-zinc-800"))
+          el.style.backgroundColor = "#27272a";
+        else if (classes.includes("bg-black"))
+          el.style.backgroundColor = "#000000";
       });
 
       const canvas = await html2canvas(elemento, {
@@ -1420,13 +1440,6 @@ export default function Home() {
               </div>
 
               <div ref={relatorioPDFRef} className="rounded-xl bg-zinc-900 p-4">
-                <h2 className="text-2xl font-bold text-emerald-400">
-                  Relatório de Pagamentos
-                </h2>
-                <p className="mb-6 text-zinc-400">
-                  Totais por mês de pagamento ou geral
-                </p>
-
                 <div className="mb-6">
                   <label className="mb-2 block text-sm font-bold text-zinc-400">
                     Filtrar relatório
