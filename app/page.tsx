@@ -1309,7 +1309,7 @@ export default function Home() {
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-                  <p className="text-sm text-zinc-400">Total líquido</p>
+                  <p className="text-sm text-zinc-400">Rescisão</p>
                   <p className="mt-2 text-2xl font-bold text-blue-400">
                     {formatarMoeda(totalLiquidoRelatorio)}
                   </p>
