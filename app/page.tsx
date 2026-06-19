@@ -378,62 +378,86 @@ export default function Home() {
   async function gerarPDFRelatorio() {
     try {
       if (!relatorioPDFRef.current) {
-        alert("Não foi possível localizar o relatório na tela.");
+        alert("Relatório não encontrado.");
         return;
       }
 
       const elemento = relatorioPDFRef.current;
 
+      const estilosOriginais: {
+        el: HTMLElement;
+        color: string;
+        backgroundColor: string;
+        borderColor: string;
+      }[] = [];
+
+      const todosElementos = Array.from(
+        elemento.querySelectorAll("*")
+      ) as HTMLElement[];
+
+      todosElementos.push(elemento);
+
+      todosElementos.forEach((el) => {
+        estilosOriginais.push({
+          el,
+          color: el.style.color,
+          backgroundColor: el.style.backgroundColor,
+          borderColor: el.style.borderColor,
+        });
+
+        const classes = el.className?.toString() || "";
+
+        el.style.borderColor = "#27272a";
+
+        if (classes.includes("text-zinc-400")) el.style.color = "#a1a1aa";
+        else if (classes.includes("text-zinc-500")) el.style.color = "#71717a";
+        else if (classes.includes("text-blue-400")) el.style.color = "#60a5fa";
+        else if (classes.includes("text-yellow-400")) el.style.color = "#facc15";
+        else if (classes.includes("text-emerald-400")) el.style.color = "#34d399";
+        else if (classes.includes("text-purple-400")) el.style.color = "#c084fc";
+        else if (classes.includes("text-white")) el.style.color = "#ffffff";
+        else el.style.color = "#ffffff";
+
+        if (classes.includes("bg-zinc-950")) el.style.backgroundColor = "#09090b";
+        else if (classes.includes("bg-zinc-900")) el.style.backgroundColor = "#18181b";
+        else if (classes.includes("bg-zinc-800")) el.style.backgroundColor = "#27272a";
+        else if (classes.includes("bg-black")) el.style.backgroundColor = "#000000";
+      });
+
       const canvas = await html2canvas(elemento, {
         scale: 2,
-        useCORS: true,
         backgroundColor: "#18181b",
-        logging: false,
+        useCORS: true,
+      });
+
+      estilosOriginais.forEach((item) => {
+        item.el.style.color = item.color;
+        item.el.style.backgroundColor = item.backgroundColor;
+        item.el.style.borderColor = item.borderColor;
       });
 
       const imgData = canvas.toDataURL("image/png");
 
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
+      const pdf = new jsPDF("p", "mm", "a4");
 
-      const larguraPagina = pdf.internal.pageSize.getWidth();
-      const alturaPagina = pdf.internal.pageSize.getHeight();
+      const larguraPdf = pdf.internal.pageSize.getWidth();
+      const alturaPdf = pdf.internal.pageSize.getHeight();
+
       const margem = 8;
+      const larguraUtil = larguraPdf - margem * 2;
+      const alturaImg = (canvas.height * larguraUtil) / canvas.width;
 
-      const larguraImagem = larguraPagina - margem * 2;
-      const alturaImagem = (canvas.height * larguraImagem) / canvas.width;
-
-      let alturaRestante = alturaImagem;
       let posicaoY = margem;
+      let alturaRestante = alturaImg;
 
-      pdf.addImage(
-        imgData,
-        "PNG",
-        margem,
-        posicaoY,
-        larguraImagem,
-        alturaImagem
-      );
-
-      alturaRestante -= alturaPagina - margem * 2;
+      pdf.addImage(imgData, "PNG", margem, posicaoY, larguraUtil, alturaImg);
+      alturaRestante -= alturaPdf - margem * 2;
 
       while (alturaRestante > 0) {
         pdf.addPage();
-        posicaoY = alturaRestante - alturaImagem + margem;
-
-        pdf.addImage(
-          imgData,
-          "PNG",
-          margem,
-          posicaoY,
-          larguraImagem,
-          alturaImagem
-        );
-
-        alturaRestante -= alturaPagina - margem * 2;
+        posicaoY = alturaRestante - alturaImg + margem;
+        pdf.addImage(imgData, "PNG", margem, posicaoY, larguraUtil, alturaImg);
+        alturaRestante -= alturaPdf - margem * 2;
       }
 
       pdf.save("relatorio-de-pagamentos.pdf");
