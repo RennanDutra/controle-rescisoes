@@ -161,6 +161,7 @@ export default function Home() {
   const [form, setForm] = useState(formInicial);
   const [abaPagamento, setAbaPagamento] = useState("Todas");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
+  const [busca, setBusca] = useState("");
 
   async function entrar() {
     if (!loginEmail.trim() || !loginSenha.trim()) {
@@ -297,7 +298,7 @@ export default function Home() {
       ? rescisoes.filter((r) => !r.prazo_pagamento)
       : rescisoes.filter((r) => r.prazo_pagamento?.startsWith(abaPagamento));
 
-  const rescisoesFiltradas =
+  const rescisoesFiltradasPorStatus =
     filtroStatus === "Todos"
       ? rescisoesFiltradasPorMes
       : rescisoesFiltradasPorMes.filter((r) =>
@@ -305,6 +306,17 @@ export default function Home() {
             ? !r.status || r.status === "Pendente"
             : r.status === filtroStatus
         );
+
+  const termoBusca = busca.trim().toLowerCase();
+
+  const rescisoesFiltradas = rescisoesFiltradasPorStatus.filter((r) => {
+    if (!termoBusca) return true;
+
+    const nome = (r.Nome || "").toLowerCase();
+    const matricula = (r.matricula || "").toLowerCase();
+
+    return nome.includes(termoBusca) || matricula.includes(termoBusca);
+  });
 
   async function carregarRescisoes() {
     const { data, error } = await supabase
@@ -920,6 +932,20 @@ export default function Home() {
           <h2 className="mb-4 text-xl font-bold">Rescisões Cadastradas</h2>
 
           <div className="mb-4">
+            <label className="mb-2 block text-sm font-bold text-zinc-400">
+              Buscar por nome ou matrícula
+            </label>
+
+            <input
+              type="text"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Digite o nome ou matrícula do funcionário..."
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div className="mb-4">
             <p className="mb-2 text-sm font-bold text-zinc-400">
               Filtrar por status
             </p>
@@ -1051,7 +1077,7 @@ export default function Home() {
 
             {rescisoesFiltradas.length === 0 && (
               <p className="mt-4 text-center text-zinc-500">
-                Nenhuma rescisão encontrada nesta aba.
+                Nenhuma rescisão encontrada nesta busca ou filtro.
               </p>
             )}
           </div>
