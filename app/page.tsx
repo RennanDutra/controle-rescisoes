@@ -376,36 +376,71 @@ export default function Home() {
   const totalGeralRelatorio = totalLiquidoRelatorio + totalFgtsRelatorio;
 
   async function gerarPDFRelatorio() {
-    if (!relatorioPDFRef.current) return;
+    try {
+      if (!relatorioPDFRef.current) {
+        alert("Não foi possível localizar o relatório na tela.");
+        return;
+      }
 
-    const canvas = await html2canvas(relatorioPDFRef.current, {
-      scale: 2,
-      backgroundColor: "#18181b",
-    });
+      const elemento = relatorioPDFRef.current;
 
-    const imgData = canvas.toDataURL("image/png");
+      const canvas = await html2canvas(elemento, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#18181b",
+        logging: false,
+      });
 
-    const pdf = new jsPDF("p", "mm", "a4");
-    const larguraPdf = 210;
-    const alturaPdf = 297;
-    const margem = 8;
-    const larguraUtil = larguraPdf - margem * 2;
-    const alturaImg = (canvas.height * larguraUtil) / canvas.width;
+      const imgData = canvas.toDataURL("image/png");
 
-    let alturaRestante = alturaImg;
-    let posicaoY = margem;
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
 
-    pdf.addImage(imgData, "PNG", margem, posicaoY, larguraUtil, alturaImg);
-    alturaRestante -= alturaPdf;
+      const larguraPagina = pdf.internal.pageSize.getWidth();
+      const alturaPagina = pdf.internal.pageSize.getHeight();
+      const margem = 8;
 
-    while (alturaRestante > 0) {
-      pdf.addPage();
-      posicaoY = alturaRestante - alturaImg + margem;
-      pdf.addImage(imgData, "PNG", margem, posicaoY, larguraUtil, alturaImg);
-      alturaRestante -= alturaPdf;
+      const larguraImagem = larguraPagina - margem * 2;
+      const alturaImagem = (canvas.height * larguraImagem) / canvas.width;
+
+      let alturaRestante = alturaImagem;
+      let posicaoY = margem;
+
+      pdf.addImage(
+        imgData,
+        "PNG",
+        margem,
+        posicaoY,
+        larguraImagem,
+        alturaImagem
+      );
+
+      alturaRestante -= alturaPagina - margem * 2;
+
+      while (alturaRestante > 0) {
+        pdf.addPage();
+        posicaoY = alturaRestante - alturaImagem + margem;
+
+        pdf.addImage(
+          imgData,
+          "PNG",
+          margem,
+          posicaoY,
+          larguraImagem,
+          alturaImagem
+        );
+
+        alturaRestante -= alturaPagina - margem * 2;
+      }
+
+      pdf.save("relatorio-de-pagamentos.pdf");
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Erro ao gerar PDF. Aperte F12, abra o Console e veja o erro.");
     }
-
-    pdf.save("relatorio-de-pagamentos.pdf");
   }
 
   async function carregarRescisoes() {
