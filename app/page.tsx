@@ -1156,7 +1156,7 @@ export default function Home() {
                     : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                 }`}
               >
-                {aba.nome} ({aba.total})
+                {aba.nome} ({aba.chave === "Todas" ? rescisoes.length : aba.total})
               </button>
             ))}
           </div>
