@@ -1198,7 +1198,7 @@ export default function Home() {
         <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-8 shadow-2xl">
           <h1 className="text-3xl font-bold">Login</h1>
           <p className="mt-2 text-zinc-400">
-            Acesse o Sistema de Controle de Rescisões
+            Acesse o Rescisões Líder
           </p>
 
           <div className="mt-6 space-y-4">
@@ -1247,7 +1247,7 @@ export default function Home() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold">
-              Sistema de Controle de Rescisões
+              Rescisões Líder
             </h1>
             <p className="mt-2 text-zinc-400">Bem-vindo ao sistema, Rennan.</p>
           </div>
@@ -1325,56 +1325,81 @@ export default function Home() {
         </div>
 
         {mostrarConfigChecklist && (
-          <div className="mt-6 rounded-xl border border-purple-800 bg-zinc-900 p-6">
-            <h2 className="mb-4 text-xl font-bold text-purple-400">
-              Checklist Padrão
-            </h2>
-
-            <div className="mb-4 flex gap-2">
-              <input
-                value={novoItemPadrao}
-                onChange={(e) => setNovoItemPadrao(e.target.value)}
-                placeholder="Novo item do checklist padrão"
-                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-purple-500"
-              />
-
-              <button
-                onClick={adicionarItemPadrao}
-                className="rounded-lg bg-purple-600 px-5 py-3 font-bold hover:bg-purple-700"
-              >
-                Adicionar
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {checklistPadrao.length === 0 && (
-                <p className="text-zinc-500">Nenhum item padrão criado ainda.</p>
-              )}
-
-              {checklistPadrao.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 p-4"
-                >
-                  <span className="font-bold">{item.titulo}</span>
-
-                  <button
-                    onClick={() => excluirItemPadrao(item.id)}
-                    className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold hover:bg-red-700"
-                  >
-                    Remover
-                  </button>
+          <Modal onClose={() => setMostrarConfigChecklist(false)}>
+            <div className="rounded-xl border border-purple-800 bg-zinc-900 p-6">
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-2xl font-bold text-purple-400">
+                    Checklist Padrão
+                  </h2>
+                  <p className="text-zinc-400">
+                    Configure os itens padrão que entram no andamento das rescisões.
+                  </p>
                 </div>
-              ))}
-            </div>
 
-            <button
-              onClick={aplicarChecklistPadraoEmTodas}
-              className="mt-6 rounded-lg bg-green-600 px-5 py-3 font-bold text-white hover:bg-green-700"
-            >
-              Aplicar checklist padrão em todas as rescisões
-            </button>
-          </div>
+                <button
+                  onClick={() => setMostrarConfigChecklist(false)}
+                  className="rounded-lg bg-red-600 px-4 py-2 font-bold hover:bg-red-700"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <div className="mb-6 flex flex-col gap-2 md:flex-row">
+                <input
+                  value={novoItemPadrao}
+                  onChange={(e) => setNovoItemPadrao(e.target.value)}
+                  placeholder="Novo item do checklist padrão"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-purple-500"
+                />
+
+                <button
+                  onClick={adicionarItemPadrao}
+                  className="rounded-lg bg-purple-600 px-5 py-3 font-bold hover:bg-purple-700"
+                >
+                  Adicionar
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {checklistPadrao.length === 0 && (
+                  <p className="text-zinc-500">Nenhum item padrão criado ainda.</p>
+                )}
+
+                {checklistPadrao.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 p-4"
+                  >
+                    <span className="font-bold">{item.titulo}</span>
+
+                    <button
+                      onClick={() => excluirItemPadrao(item.id)}
+                      className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold hover:bg-red-700"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  onClick={aplicarChecklistPadraoEmTodas}
+                  className="rounded-lg bg-green-600 px-5 py-3 font-bold text-white hover:bg-green-700"
+                >
+                  Aplicar checklist padrão em todas as rescisões
+                </button>
+
+                <button
+                  onClick={() => setMostrarConfigChecklist(false)}
+                  className="rounded-lg bg-zinc-700 px-5 py-3 font-bold text-white hover:bg-zinc-600"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </Modal>
         )}
 
         {mostrarDashboard && (
