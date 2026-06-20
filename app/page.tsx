@@ -124,11 +124,13 @@ function Modal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      translate="no"
+      className="notranslate fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
       onClick={onClose}
     >
       <div
-        className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl"
+        translate="no"
+        className="notranslate max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -148,6 +150,8 @@ export default function Home() {
 
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [rescisoes, setRescisoes] = useState<Rescisao[]>([]);
+  const [totalRescisoes, setTotalRescisoes] = useState(0);
+
   const [rescisaoSelecionada, setRescisaoSelecionada] =
     useState<Rescisao | null>(null);
 
@@ -201,6 +205,7 @@ export default function Home() {
     await supabase.auth.signOut();
     setSession(null);
     setRescisoes([]);
+    setTotalRescisoes(0);
     setChecklistPadrao([]);
     setMostrarFormulario(false);
     setRescisaoSelecionada(null);
@@ -320,23 +325,16 @@ export default function Home() {
       return a.localeCompare(b);
     });
 
-    return [
-      {
-        chave: "Todas",
-        nome: "Todas",
-        total: listaRescisoes.length,
-      },
-      ...abasOrdenadas.map(([chave, nome]) => ({
-        chave,
-        nome,
-        total:
-          chave === "Sem pagamento"
-            ? listaRescisoes.filter((r) => !r.prazo_pagamento).length
-            : listaRescisoes.filter((r) =>
-                String(r.prazo_pagamento || "").startsWith(chave)
-              ).length,
-      })),
-    ];
+    return abasOrdenadas.map(([chave, nome]) => ({
+      chave,
+      nome,
+      total:
+        chave === "Sem pagamento"
+          ? listaRescisoes.filter((r) => !r.prazo_pagamento).length
+          : listaRescisoes.filter((r) =>
+              String(r.prazo_pagamento || "").startsWith(chave)
+            ).length,
+    }));
   }
 
   const abasPagamento = criarAbasPagamento();
@@ -499,6 +497,7 @@ export default function Home() {
     }
 
     setRescisoes(data || []);
+    setTotalRescisoes((data || []).length);
   }
 
   async function carregarChecklistPadrao() {
@@ -844,7 +843,7 @@ export default function Home() {
 
   function input(campo: string, label: string, tipo = "text") {
     return (
-      <div>
+      <div translate="no" className="notranslate">
         <label className="mb-1 block text-sm text-zinc-400">{label}</label>
         <input
           type={tipo}
@@ -858,7 +857,7 @@ export default function Home() {
 
   function select(campo: string, label: string, opcoes: string[]) {
     return (
-      <div>
+      <div translate="no" className="notranslate">
         <label className="mb-1 block text-sm text-zinc-400">{label}</label>
         <select
           value={(form as any)[campo]}
@@ -875,7 +874,10 @@ export default function Home() {
 
   function detalhe(titulo: string, valor: any) {
     return (
-      <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+      <div
+        translate="no"
+        className="notranslate rounded-lg border border-zinc-800 bg-zinc-950 p-4"
+      >
         <p className="text-sm text-zinc-500">{titulo}</p>
         <p className="mt-1 whitespace-pre-wrap font-semibold text-white">
           {valor || "-"}
@@ -883,6 +885,25 @@ export default function Home() {
       </div>
     );
   }
+
+  useEffect(() => {
+    document.documentElement.lang = "pt-BR";
+    document.documentElement.setAttribute("translate", "no");
+    document.body.classList.add("notranslate");
+    document.body.setAttribute("translate", "no");
+
+    let metaGoogle = document.querySelector(
+      'meta[name="google"]'
+    ) as HTMLMetaElement | null;
+
+    if (!metaGoogle) {
+      metaGoogle = document.createElement("meta");
+      metaGoogle.name = "google";
+      document.head.appendChild(metaGoogle);
+    }
+
+    metaGoogle.content = "notranslate";
+  }, []);
 
   useEffect(() => {
     async function verificarSessao() {
@@ -917,7 +938,10 @@ export default function Home() {
 
   if (carregandoSessao) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-black text-white">
+      <main
+        translate="no"
+        className="notranslate flex min-h-screen items-center justify-center bg-black text-white"
+      >
         <p className="text-zinc-400">Carregando...</p>
       </main>
     );
@@ -925,8 +949,14 @@ export default function Home() {
 
   if (!session) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
-        <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-8 shadow-2xl">
+      <main
+        translate="no"
+        className="notranslate flex min-h-screen items-center justify-center bg-black p-6 text-white"
+      >
+        <div
+          translate="no"
+          className="notranslate w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-8 shadow-2xl"
+        >
           <h1 className="text-3xl font-bold">Login</h1>
           <p className="mt-2 text-zinc-400">
             Acesse o Sistema de Controle de Rescisões
@@ -970,8 +1000,11 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-black p-8 text-white">
-      <div className="mx-auto w-full max-w-[95vw]">
+    <main
+      translate="no"
+      className="notranslate min-h-screen bg-black p-8 text-white"
+    >
+      <div translate="no" className="notranslate mx-auto w-full max-w-[95vw]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold">
@@ -1146,6 +1179,17 @@ export default function Home() {
           </p>
 
           <div className="mb-6 flex flex-wrap gap-2">
+            <button
+              onClick={() => setAbaPagamento("Todas")}
+              className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                abaPagamento === "Todas"
+                  ? "bg-blue-600 text-white"
+                  : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+              }`}
+            >
+              Todas ({totalRescisoes})
+            </button>
+
             {abasPagamento.map((aba) => (
               <button
                 key={aba.chave}
@@ -1156,7 +1200,7 @@ export default function Home() {
                     : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                 }`}
               >
-                {aba.nome} ({aba.chave === "Todas" ? rescisoes.length : aba.total})
+                {aba.nome} ({aba.total})
               </button>
             ))}
           </div>
@@ -1450,6 +1494,8 @@ export default function Home() {
                     onChange={(e) => setAbaRelatorio(e.target.value)}
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-emerald-500"
                   >
+                    <option value="Todas">Todas</option>
+
                     {abasPagamento.map((aba) => (
                       <option key={aba.chave} value={aba.chave}>
                         {aba.nome}
