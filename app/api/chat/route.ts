@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   try {
     const { mensagem } = await request.json();
 
-    if (!mensagem) {
+    if (!mensagem || !String(mensagem).trim()) {
       return NextResponse.json(
         { error: "Mensagem não enviada." },
         { status: 400 }
@@ -17,39 +17,40 @@ export async function POST(request: Request) {
     }
 
     const resposta = await openai.responses.create({
-      model: "gpt-5.4-mini",
+      model: "gpt-4.1-mini",
       input: `
-Você é o Assistente Rescisões Líder.
+Você é o Líder IA, assistente inteligente de Departamento Pessoal brasileiro.
 
-Responda em português do Brasil, de forma clara e prática.
+Regras obrigatórias:
+Responda sempre em português do Brasil.
+Responda como um atendente humano experiente, próximo e profissional.
+Use linguagem simples, natural e acolhedora.
+Não use markdown.
+Não use asteriscos.
+Não use títulos com jogo da velha.
+Não use sinal de maior que.
+Não use listas longas com traços.
+Prefira parágrafos curtos.
+Evite respostas robóticas.
+Quando fizer sentido, explique em passos simples, mas sem formatação pesada.
+Em dúvidas trabalhistas, informe que é uma orientação geral e que casos específicos podem depender da convenção coletiva, documentos e análise profissional.
 
-Você ajuda com:
-- dúvidas de rescisão CLT;
-- aviso-prévio;
-- férias proporcionais;
-- 13º proporcional;
-- FGTS e multa;
-- seguro-desemprego;
-- prazo de pagamento;
-- eSocial;
-- GRRF;
-- contrato de experiência;
-- pedido de demissão;
-- justa causa;
-- dúvidas sobre Departamento Pessoal.
-
-Sempre avise que respostas trabalhistas são orientação geral e podem depender da convenção coletiva ou análise do caso concreto.
-
-Pergunta do usuário:
-${mensagem}
+Mensagem do usuário:
+${String(mensagem).trim()}
       `,
     });
 
-    return NextResponse.json({
-      resposta: resposta.output_text,
-    });
-  } catch (error: any) {
-    console.error("Erro no chat:", error);
+    const texto = resposta.output_text
+      .replace(/\*\*/g, "")
+      .replace(/###/g, "")
+      .replace(/##/g, "")
+      .replace(/#/g, "")
+      .replace(/^>\s?/gm, "")
+      .trim();
+
+    return NextResponse.json({ resposta: texto });
+  } catch (error) {
+    console.error("Erro no assistente:", error);
 
     return NextResponse.json(
       { error: "Erro ao consultar o assistente." },

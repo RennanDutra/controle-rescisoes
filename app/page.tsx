@@ -224,7 +224,7 @@ export default function Home() {
     {
       autor: "assistente",
       texto:
-        "Olá! Sou a Líder IA, sua assistente virtual especializada em Departamento Pessoal. Posso ajudar com qualquer dúvida sobre o seu DP.",
+        "Olá! Sou o Líder IA.\n\nEstou aqui para ajudar com dúvidas sobre as rotinas de Departamento Pessoal.\n\nComo posso ajudar você hoje?",
     },
   ]);
 
@@ -2467,7 +2467,7 @@ export default function Home() {
                 <div>
                   <h2 className="text-lg font-bold text-white">Líder IA</h2>
                   <p className="text-xs text-zinc-400">
-                    Especialista em RH e Departamento Pessoal
+                    Assistente Inteligente de Departamento Pessoal
                   </p>
                 </div>
               </div>
@@ -2540,7 +2540,7 @@ export default function Home() {
                       enviarMensagemChat();
                     }
                   }}
-                  placeholder="Digite sua dúvida para a Líder IA..."
+                  placeholder="Digite sua dúvida para o Líder IA..."
                   rows={2}
                   className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-800 p-3 text-sm text-white outline-none focus:border-blue-500"
                 />
