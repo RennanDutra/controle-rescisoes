@@ -17,6 +17,17 @@ type ChecklistPadrao = {
   titulo: string;
 };
 
+type AlertaPagamento = {
+  id?: number;
+  nome: string;
+  email_destino: string;
+  dias_antes: number;
+  tipo: string;
+  motivo: string;
+  palavra_chave?: string;
+  ativo: boolean;
+};
+
 type Rescisao = {
   id?: number;
   Empresa: string;
@@ -52,6 +63,16 @@ type Rescisao = {
 };
 
 const statusOpcoes = ["Pendente", "Em cálculo", "Finalizado"];
+
+const motivosAlerta = [
+  "Prazo de pagamento",
+  "ASO vencido",
+  "Guia SD pendente",
+  "Kit demissional pendente",
+  "FGTS mensal + multa",
+  "Status diferente de Finalizado",
+  "Observação contém palavra",
+];
 
 const meses = [
   "Janeiro",
@@ -151,7 +172,6 @@ export default function Home() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [rescisoes, setRescisoes] = useState<Rescisao[]>([]);
   const [totalRescisoes, setTotalRescisoes] = useState(0);
-
   const [rescisaoSelecionada, setRescisaoSelecionada] =
     useState<Rescisao | null>(null);
 
@@ -174,6 +194,15 @@ export default function Home() {
   const [checklistPadrao, setChecklistPadrao] = useState<ChecklistPadrao[]>([]);
   const [novoItemPadrao, setNovoItemPadrao] = useState("");
   const [mostrarConfigChecklist, setMostrarConfigChecklist] = useState(false);
+
+  const [alertasPagamento, setAlertasPagamento] = useState<AlertaPagamento[]>([]);
+  const [mostrarConfigAlertas, setMostrarConfigAlertas] = useState(false);
+  const [nomeAlerta, setNomeAlerta] = useState("");
+  const [emailAlerta, setEmailAlerta] = useState("");
+  const [diasAntesAlerta, setDiasAntesAlerta] = useState("3");
+  const [tipoAlerta, setTipoAlerta] = useState("Padrão");
+  const [motivoAlerta, setMotivoAlerta] = useState("Prazo de pagamento");
+  const [palavraChaveAlerta, setPalavraChaveAlerta] = useState("");
 
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [form, setForm] = useState(formInicial);
@@ -207,6 +236,7 @@ export default function Home() {
     setRescisoes([]);
     setTotalRescisoes(0);
     setChecklistPadrao([]);
+    setAlertasPagamento([]);
     setMostrarFormulario(false);
     setRescisaoSelecionada(null);
     setRescisaoAndamento(null);
@@ -261,6 +291,76 @@ export default function Home() {
     }
 
     return formatarData(data);
+  }
+
+  function dataHojeSemHora() {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    return hoje;
+  }
+
+  function diferencaDiasAtePrazo(prazoPagamento: string) {
+    if (!prazoPagamento) return null;
+
+    const hoje = dataHojeSemHora();
+    const prazo = new Date(prazoPagamento + "T00:00:00");
+    prazo.setHours(0, 0, 0, 0);
+
+    const diferenca = prazo.getTime() - hoje.getTime();
+    return Math.ceil(diferenca / (1000 * 60 * 60 * 24));
+  }
+
+  function textoPrazo(prazoPagamento: string) {
+    const dias = diferencaDiasAtePrazo(prazoPagamento);
+
+    if (dias === null) return "Sem prazo";
+    if (dias < 0) return `Vencido há ${Math.abs(dias)} dia(s)`;
+    if (dias === 0) return "Vence hoje";
+    if (dias === 1) return "Vence amanhã";
+
+    return `Vence em ${dias} dias`;
+  }
+
+  function classePrazo(prazoPagamento: string) {
+    const dias = diferencaDiasAtePrazo(prazoPagamento);
+
+    if (dias === null) return "bg-zinc-800 text-zinc-300";
+    if (dias < 0) return "bg-red-600 text-white";
+    if (dias === 0) return "bg-yellow-500 text-black";
+    if (dias <= 3) return "bg-orange-500 text-black";
+    if (dias <= 7) return "bg-blue-600 text-white";
+
+    return "bg-green-600 text-white";
+  }
+
+  function alertaCombinaComRescisao(alerta: AlertaPagamento, rescisao: Rescisao) {
+    if (!alerta.ativo) return false;
+
+    const dias = diferencaDiasAtePrazo(rescisao.prazo_pagamento);
+    if (dias === null) return false;
+
+    if (dias > Number(alerta.dias_antes)) return false;
+
+    if (alerta.tipo === "Padrão") return true;
+
+    if (alerta.motivo === "ASO vencido") return rescisao.aso === "Vencido";
+    if (alerta.motivo === "Guia SD pendente") return rescisao.guia_sd === "Não";
+    if (alerta.motivo === "Kit demissional pendente") {
+      return !String(rescisao.kit_demissional || "").trim();
+    }
+    if (alerta.motivo === "FGTS mensal + multa") {
+      return rescisao.fgts === "Mensal + Multa";
+    }
+    if (alerta.motivo === "Status diferente de Finalizado") {
+      return rescisao.status !== "Finalizado";
+    }
+    if (alerta.motivo === "Observação contém palavra") {
+      const palavra = String(alerta.palavra_chave || "").trim().toLowerCase();
+      if (!palavra) return false;
+      return String(rescisao.observacao || "").toLowerCase().includes(palavra);
+    }
+
+    return true;
   }
 
   function gerarChecklistPadrao() {
@@ -325,16 +425,23 @@ export default function Home() {
       return a.localeCompare(b);
     });
 
-    return abasOrdenadas.map(([chave, nome]) => ({
-      chave,
-      nome,
-      total:
-        chave === "Sem pagamento"
-          ? listaRescisoes.filter((r) => !r.prazo_pagamento).length
-          : listaRescisoes.filter((r) =>
-              String(r.prazo_pagamento || "").startsWith(chave)
-            ).length,
-    }));
+    return [
+      {
+        chave: "Todas",
+        nome: "Todas",
+        total: listaRescisoes.length,
+      },
+      ...abasOrdenadas.map(([chave, nome]) => ({
+        chave,
+        nome,
+        total:
+          chave === "Sem pagamento"
+            ? listaRescisoes.filter((r) => !r.prazo_pagamento).length
+            : listaRescisoes.filter((r) =>
+                String(r.prazo_pagamento || "").startsWith(chave)
+              ).length,
+      })),
+    ];
   }
 
   const abasPagamento = criarAbasPagamento();
@@ -388,6 +495,45 @@ export default function Home() {
   );
 
   const totalGeralRelatorio = totalLiquidoRelatorio + totalFgtsRelatorio;
+
+  const rescisoesVencidas = rescisoes.filter((r) => {
+    const dias = diferencaDiasAtePrazo(r.prazo_pagamento);
+    return dias !== null && dias < 0;
+  });
+
+  const rescisoesVencemHoje = rescisoes.filter((r) => {
+    const dias = diferencaDiasAtePrazo(r.prazo_pagamento);
+    return dias === 0;
+  });
+
+  const rescisoesVencemAte3Dias = rescisoes.filter((r) => {
+    const dias = diferencaDiasAtePrazo(r.prazo_pagamento);
+    return dias !== null && dias > 0 && dias <= 3;
+  });
+
+  const rescisoesVencemAte7Dias = rescisoes.filter((r) => {
+    const dias = diferencaDiasAtePrazo(r.prazo_pagamento);
+    return dias !== null && dias > 0 && dias <= 7;
+  });
+
+  const rescisoesSemPrazo = rescisoes.filter((r) => !r.prazo_pagamento);
+
+  const rescisoesCriticas = rescisoes
+    .filter((r) => {
+      const dias = diferencaDiasAtePrazo(r.prazo_pagamento);
+      return dias !== null && dias <= 7;
+    })
+    .sort((a, b) => {
+      const diasA = diferencaDiasAtePrazo(a.prazo_pagamento) ?? 9999;
+      const diasB = diferencaDiasAtePrazo(b.prazo_pagamento) ?? 9999;
+      return diasA - diasB;
+    });
+
+  const previsoesAlertas = alertasPagamento.flatMap((alerta) =>
+    rescisoes
+      .filter((rescisao) => alertaCombinaComRescisao(alerta, rescisao))
+      .map((rescisao) => ({ alerta, rescisao }))
+  );
 
   async function gerarPDFRelatorio() {
     try {
@@ -512,6 +658,101 @@ export default function Home() {
     }
 
     setChecklistPadrao(data || []);
+  }
+
+  async function carregarAlertasPagamento() {
+    const { data, error } = await supabase
+      .from("alertas_pagamento")
+      .select("*")
+      .order("id", { ascending: false });
+
+    if (error) {
+      console.error(error.message);
+      return;
+    }
+
+    setAlertasPagamento(data || []);
+  }
+
+  async function cadastrarAlertaPagamento() {
+    if (!nomeAlerta.trim()) {
+      alert("Informe o nome do alerta.");
+      return;
+    }
+
+    if (!emailAlerta.trim()) {
+      alert("Informe o email que receberá o alerta.");
+      return;
+    }
+
+    const dias = Number(diasAntesAlerta);
+
+    if (Number.isNaN(dias) || dias < 0) {
+      alert("Informe uma quantidade de dias válida.");
+      return;
+    }
+
+    const { error } = await supabase.from("alertas_pagamento").insert({
+      nome: nomeAlerta.trim(),
+      email_destino: emailAlerta.trim(),
+      dias_antes: dias,
+      tipo: tipoAlerta,
+      motivo: tipoAlerta === "Padrão" ? "Prazo de pagamento" : motivoAlerta,
+      palavra_chave:
+        motivoAlerta === "Observação contém palavra"
+          ? palavraChaveAlerta.trim()
+          : "",
+      ativo: true,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setNomeAlerta("");
+    setEmailAlerta("");
+    setDiasAntesAlerta("3");
+    setTipoAlerta("Padrão");
+    setMotivoAlerta("Prazo de pagamento");
+    setPalavraChaveAlerta("");
+
+    carregarAlertasPagamento();
+  }
+
+  async function alternarAlertaPagamento(alerta: AlertaPagamento) {
+    if (!alerta.id) return;
+
+    const { error } = await supabase
+      .from("alertas_pagamento")
+      .update({ ativo: !alerta.ativo })
+      .eq("id", alerta.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    carregarAlertasPagamento();
+  }
+
+  async function excluirAlertaPagamento(id: number | undefined) {
+    if (!id) return;
+
+    const confirmar = confirm("Deseja excluir este alerta?");
+    if (!confirmar) return;
+
+    const { error } = await supabase
+      .from("alertas_pagamento")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    carregarAlertasPagamento();
   }
 
   async function adicionarItemPadrao() {
@@ -843,7 +1084,7 @@ export default function Home() {
 
   function input(campo: string, label: string, tipo = "text") {
     return (
-      <div translate="no" className="notranslate">
+      <div>
         <label className="mb-1 block text-sm text-zinc-400">{label}</label>
         <input
           type={tipo}
@@ -857,7 +1098,7 @@ export default function Home() {
 
   function select(campo: string, label: string, opcoes: string[]) {
     return (
-      <div translate="no" className="notranslate">
+      <div>
         <label className="mb-1 block text-sm text-zinc-400">{label}</label>
         <select
           value={(form as any)[campo]}
@@ -874,10 +1115,7 @@ export default function Home() {
 
   function detalhe(titulo: string, valor: any) {
     return (
-      <div
-        translate="no"
-        className="notranslate rounded-lg border border-zinc-800 bg-zinc-950 p-4"
-      >
+      <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
         <p className="text-sm text-zinc-500">{titulo}</p>
         <p className="mt-1 whitespace-pre-wrap font-semibold text-white">
           {valor || "-"}
@@ -915,6 +1153,7 @@ export default function Home() {
       if (data.session) {
         carregarRescisoes();
         carregarChecklistPadrao();
+        carregarAlertasPagamento();
       }
     }
 
@@ -928,6 +1167,7 @@ export default function Home() {
       if (novaSessao) {
         carregarRescisoes();
         carregarChecklistPadrao();
+        carregarAlertasPagamento();
       }
     });
 
@@ -938,10 +1178,7 @@ export default function Home() {
 
   if (carregandoSessao) {
     return (
-      <main
-        translate="no"
-        className="notranslate flex min-h-screen items-center justify-center bg-black text-white"
-      >
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
         <p className="text-zinc-400">Carregando...</p>
       </main>
     );
@@ -949,14 +1186,8 @@ export default function Home() {
 
   if (!session) {
     return (
-      <main
-        translate="no"
-        className="notranslate flex min-h-screen items-center justify-center bg-black p-6 text-white"
-      >
-        <div
-          translate="no"
-          className="notranslate w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-8 shadow-2xl"
-        >
+      <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
+        <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-8 shadow-2xl">
           <h1 className="text-3xl font-bold">Login</h1>
           <p className="mt-2 text-zinc-400">
             Acesse o Sistema de Controle de Rescisões
@@ -1004,7 +1235,7 @@ export default function Home() {
       translate="no"
       className="notranslate min-h-screen bg-black p-8 text-white"
     >
-      <div translate="no" className="notranslate mx-auto w-full max-w-[95vw]">
+      <div className="mx-auto w-full max-w-[95vw]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold">
@@ -1041,6 +1272,102 @@ export default function Home() {
           ))}
         </div>
 
+        <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-orange-400">
+                Dashboard de Prazos
+              </h2>
+              <p className="text-zinc-400">
+                Acompanhe vencimentos e alertas das rescisões.
+              </p>
+            </div>
+
+            <span className="rounded-full bg-zinc-800 px-4 py-2 text-sm font-bold text-zinc-300">
+              {previsoesAlertas.length} alerta(s) previsto(s)
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+            <div className="rounded-xl border border-red-800 bg-zinc-950 p-5">
+              <p className="text-sm text-zinc-400">Vencidas</p>
+              <p className="mt-2 text-3xl font-bold text-red-400">
+                {rescisoesVencidas.length}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-yellow-700 bg-zinc-950 p-5">
+              <p className="text-sm text-zinc-400">Vencem hoje</p>
+              <p className="mt-2 text-3xl font-bold text-yellow-400">
+                {rescisoesVencemHoje.length}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-orange-700 bg-zinc-950 p-5">
+              <p className="text-sm text-zinc-400">Até 3 dias</p>
+              <p className="mt-2 text-3xl font-bold text-orange-400">
+                {rescisoesVencemAte3Dias.length}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-blue-700 bg-zinc-950 p-5">
+              <p className="text-sm text-zinc-400">Até 7 dias</p>
+              <p className="mt-2 text-3xl font-bold text-blue-400">
+                {rescisoesVencemAte7Dias.length}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-700 bg-zinc-950 p-5">
+              <p className="text-sm text-zinc-400">Sem prazo</p>
+              <p className="mt-2 text-3xl font-bold text-zinc-300">
+                {rescisoesSemPrazo.length}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-zinc-800 text-left">
+                  <th className="p-4">Matrícula</th>
+                  <th className="p-4">Nome</th>
+                  <th className="p-4">Empresa</th>
+                  <th className="p-4">Pagamento</th>
+                  <th className="p-4">Prazo</th>
+                  <th className="p-4">Status</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {rescisoesCriticas.map((r) => (
+                  <tr key={r.id} className="border-b border-zinc-800">
+                    <td className="p-4">{r.matricula}</td>
+                    <td className="p-4 font-bold">{r.Nome}</td>
+                    <td className="p-4">{r.Empresa}</td>
+                    <td className="p-4">{r.prazo_pagamento || "-"}</td>
+                    <td className="p-4">
+                      <span
+                        className={`rounded-full px-3 py-1 text-sm font-bold ${classePrazo(
+                          r.prazo_pagamento
+                        )}`}
+                      >
+                        {textoPrazo(r.prazo_pagamento)}
+                      </span>
+                    </td>
+                    <td className="p-4">{r.status || "Pendente"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {rescisoesCriticas.length === 0 && (
+              <p className="mt-4 text-center text-zinc-500">
+                Nenhuma rescisão vencida ou vencendo nos próximos 7 dias.
+              </p>
+            )}
+          </div>
+        </div>
+
         <div className="mt-8 flex flex-wrap gap-3">
           <button
             onClick={() => {
@@ -1058,6 +1385,13 @@ export default function Home() {
             className="rounded-lg bg-purple-600 px-5 py-3 font-bold text-white hover:bg-purple-700"
           >
             Configurar Checklist
+          </button>
+
+          <button
+            onClick={() => setMostrarConfigAlertas(!mostrarConfigAlertas)}
+            className="rounded-lg bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
+          >
+            Configurar Alertas
           </button>
 
           <button
@@ -1121,6 +1455,188 @@ export default function Home() {
             >
               Aplicar checklist padrão em todas as rescisões
             </button>
+          </div>
+        )}
+
+        {mostrarConfigAlertas && (
+          <div className="mt-6 rounded-xl border border-orange-800 bg-zinc-900 p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-orange-400">
+                Configurar Alertas
+              </h2>
+              <p className="text-zinc-400">
+                Cadastre alertas padrão ou alertas específicos por motivo.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-sm text-zinc-400">
+                  Nome do alerta
+                </label>
+                <input
+                  value={nomeAlerta}
+                  onChange={(e) => setNomeAlerta(e.target.value)}
+                  placeholder="Ex: Aviso financeiro"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-zinc-400">
+                  Email que receberá
+                </label>
+                <input
+                  type="email"
+                  value={emailAlerta}
+                  onChange={(e) => setEmailAlerta(e.target.value)}
+                  placeholder="exemplo@email.com"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-zinc-400">
+                  Avisar com quantos dias antes
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={diasAntesAlerta}
+                  onChange={(e) => setDiasAntesAlerta(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm text-zinc-400">
+                  Tipo do alerta
+                </label>
+                <select
+                  value={tipoAlerta}
+                  onChange={(e) => setTipoAlerta(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-orange-500"
+                >
+                  <option>Padrão</option>
+                  <option>Específico</option>
+                </select>
+              </div>
+
+              {tipoAlerta === "Específico" && (
+                <div>
+                  <label className="mb-1 block text-sm text-zinc-400">
+                    Motivo específico
+                  </label>
+                  <select
+                    value={motivoAlerta}
+                    onChange={(e) => setMotivoAlerta(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-orange-500"
+                  >
+                    {motivosAlerta.map((motivo) => (
+                      <option key={motivo}>{motivo}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {tipoAlerta === "Específico" &&
+                motivoAlerta === "Observação contém palavra" && (
+                  <div>
+                    <label className="mb-1 block text-sm text-zinc-400">
+                      Palavra na observação
+                    </label>
+                    <input
+                      value={palavraChaveAlerta}
+                      onChange={(e) => setPalavraChaveAlerta(e.target.value)}
+                      placeholder="Ex: urgência"
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-orange-500"
+                    />
+                  </div>
+                )}
+            </div>
+
+            <button
+              onClick={cadastrarAlertaPagamento}
+              className="mt-6 rounded-lg bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
+            >
+              Cadastrar alerta
+            </button>
+
+            <div className="mt-8">
+              <h3 className="mb-3 text-lg font-bold">Alertas cadastrados</h3>
+
+              <div className="space-y-3">
+                {alertasPagamento.length === 0 && (
+                  <p className="text-zinc-500">Nenhum alerta cadastrado.</p>
+                )}
+
+                {alertasPagamento.map((alerta) => (
+                  <div
+                    key={alerta.id}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-white">{alerta.nome}</p>
+                        <p className="text-sm text-zinc-400">
+                          {alerta.email_destino} • {alerta.dias_antes} dia(s)
+                          antes • {alerta.tipo} • {alerta.motivo}
+                          {alerta.palavra_chave
+                            ? ` • Palavra: ${alerta.palavra_chave}`
+                            : ""}
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => alternarAlertaPagamento(alerta)}
+                          className={`rounded-lg px-4 py-2 text-sm font-bold ${
+                            alerta.ativo
+                              ? "bg-green-600 hover:bg-green-700"
+                              : "bg-zinc-700 hover:bg-zinc-600"
+                          }`}
+                        >
+                          {alerta.ativo ? "Ativo" : "Inativo"}
+                        </button>
+
+                        <button
+                          onClick={() => excluirAlertaPagamento(alerta.id)}
+                          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold hover:bg-red-700"
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-8 rounded-lg border border-orange-800 bg-zinc-950 p-4">
+              <h3 className="mb-3 text-lg font-bold text-orange-400">
+                Prévia de alertas que seriam enviados hoje
+              </h3>
+
+              <div className="space-y-2">
+                {previsoesAlertas.length === 0 && (
+                  <p className="text-zinc-500">
+                    Nenhum alerta previsto para as regras atuais.
+                  </p>
+                )}
+
+                {previsoesAlertas.slice(0, 20).map(({ alerta, rescisao }) => (
+                  <div
+                    key={`${alerta.id}-${rescisao.id}`}
+                    className="rounded-lg bg-zinc-900 p-3 text-sm text-zinc-300"
+                  >
+                    <strong>{alerta.nome}</strong> para
+                    <strong> {alerta.email_destino}</strong> — {rescisao.Nome} /
+                    {" "}
+                    {rescisao.Empresa} — {textoPrazo(rescisao.prazo_pagamento)}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1190,19 +1706,21 @@ export default function Home() {
               Todas ({totalRescisoes})
             </button>
 
-            {abasPagamento.map((aba) => (
-              <button
-                key={aba.chave}
-                onClick={() => setAbaPagamento(aba.chave)}
-                className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                  abaPagamento === aba.chave
-                    ? "bg-blue-600 text-white"
-                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                }`}
-              >
-                {aba.nome} ({aba.total})
-              </button>
-            ))}
+            {abasPagamento
+              .filter((aba) => aba.chave !== "Todas")
+              .map((aba) => (
+                <button
+                  key={aba.chave}
+                  onClick={() => setAbaPagamento(aba.chave)}
+                  className={`rounded-full px-4 py-2 text-sm font-bold transition ${
+                    abaPagamento === aba.chave
+                      ? "bg-blue-600 text-white"
+                      : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                  }`}
+                >
+                  {aba.nome} ({aba.total})
+                </button>
+              ))}
           </div>
 
           <div className="overflow-x-auto">
@@ -1494,8 +2012,6 @@ export default function Home() {
                     onChange={(e) => setAbaRelatorio(e.target.value)}
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-emerald-500"
                   >
-                    <option value="Todas">Todas</option>
-
                     {abasPagamento.map((aba) => (
                       <option key={aba.chave} value={aba.chave}>
                         {aba.nome}
