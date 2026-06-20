@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const resposta = await openai.responses.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-5.4-mini",
       input: `
 Você é o Assistente Rescisões Líder.
 
