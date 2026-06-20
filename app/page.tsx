@@ -196,6 +196,7 @@ export default function Home() {
   const [mostrarConfigChecklist, setMostrarConfigChecklist] = useState(false);
 
   const [alertasPagamento, setAlertasPagamento] = useState<AlertaPagamento[]>([]);
+  const [mostrarDashboard, setMostrarDashboard] = useState(false);
   const [mostrarConfigAlertas, setMostrarConfigAlertas] = useState(false);
   const [nomeAlerta, setNomeAlerta] = useState("");
   const [emailAlerta, setEmailAlerta] = useState("");
@@ -243,6 +244,8 @@ export default function Home() {
     setRescisaoObservacao(null);
     setRescisaoValores(null);
     setMostrarRelatorio(false);
+    setMostrarDashboard(false);
+    setMostrarConfigAlertas(false);
   }
 
   function formatarData(data: Date) {
@@ -506,14 +509,19 @@ export default function Home() {
     return dias === 0;
   });
 
-  const rescisoesVencemAte3Dias = rescisoes.filter((r) => {
+  const rescisoesVencemEm1Dia = rescisoes.filter((r) => {
     const dias = diferencaDiasAtePrazo(r.prazo_pagamento);
-    return dias !== null && dias > 0 && dias <= 3;
+    return dias === 1;
   });
 
-  const rescisoesVencemAte7Dias = rescisoes.filter((r) => {
+  const rescisoesVencemEm2Dias = rescisoes.filter((r) => {
     const dias = diferencaDiasAtePrazo(r.prazo_pagamento);
-    return dias !== null && dias > 0 && dias <= 7;
+    return dias === 2;
+  });
+
+  const rescisoesVencemEm4Dias = rescisoes.filter((r) => {
+    const dias = diferencaDiasAtePrazo(r.prazo_pagamento);
+    return dias === 4;
   });
 
   const rescisoesSemPrazo = rescisoes.filter((r) => !r.prazo_pagamento);
@@ -521,7 +529,7 @@ export default function Home() {
   const rescisoesCriticas = rescisoes
     .filter((r) => {
       const dias = diferencaDiasAtePrazo(r.prazo_pagamento);
-      return dias !== null && dias <= 7;
+      return dias !== null && (dias < 0 || dias === 0 || dias === 1 || dias === 2 || dias === 4);
     })
     .sort((a, b) => {
       const diasA = diferencaDiasAtePrazo(a.prazo_pagamento) ?? 9999;
@@ -1272,103 +1280,14 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold text-orange-400">
-                Dashboard de Prazos
-              </h2>
-              <p className="text-zinc-400">
-                Acompanhe vencimentos e alertas das rescisões.
-              </p>
-            </div>
-
-            <span className="rounded-full bg-zinc-800 px-4 py-2 text-sm font-bold text-zinc-300">
-              {previsoesAlertas.length} alerta(s) previsto(s)
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-            <div className="rounded-xl border border-red-800 bg-zinc-950 p-5">
-              <p className="text-sm text-zinc-400">Vencidas</p>
-              <p className="mt-2 text-3xl font-bold text-red-400">
-                {rescisoesVencidas.length}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-yellow-700 bg-zinc-950 p-5">
-              <p className="text-sm text-zinc-400">Vencem hoje</p>
-              <p className="mt-2 text-3xl font-bold text-yellow-400">
-                {rescisoesVencemHoje.length}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-orange-700 bg-zinc-950 p-5">
-              <p className="text-sm text-zinc-400">Até 3 dias</p>
-              <p className="mt-2 text-3xl font-bold text-orange-400">
-                {rescisoesVencemAte3Dias.length}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-blue-700 bg-zinc-950 p-5">
-              <p className="text-sm text-zinc-400">Até 7 dias</p>
-              <p className="mt-2 text-3xl font-bold text-blue-400">
-                {rescisoesVencemAte7Dias.length}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-zinc-700 bg-zinc-950 p-5">
-              <p className="text-sm text-zinc-400">Sem prazo</p>
-              <p className="mt-2 text-3xl font-bold text-zinc-300">
-                {rescisoesSemPrazo.length}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-zinc-800 text-left">
-                  <th className="p-4">Matrícula</th>
-                  <th className="p-4">Nome</th>
-                  <th className="p-4">Empresa</th>
-                  <th className="p-4">Pagamento</th>
-                  <th className="p-4">Prazo</th>
-                  <th className="p-4">Status</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {rescisoesCriticas.map((r) => (
-                  <tr key={r.id} className="border-b border-zinc-800">
-                    <td className="p-4">{r.matricula}</td>
-                    <td className="p-4 font-bold">{r.Nome}</td>
-                    <td className="p-4">{r.Empresa}</td>
-                    <td className="p-4">{r.prazo_pagamento || "-"}</td>
-                    <td className="p-4">
-                      <span
-                        className={`rounded-full px-3 py-1 text-sm font-bold ${classePrazo(
-                          r.prazo_pagamento
-                        )}`}
-                      >
-                        {textoPrazo(r.prazo_pagamento)}
-                      </span>
-                    </td>
-                    <td className="p-4">{r.status || "Pendente"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {rescisoesCriticas.length === 0 && (
-              <p className="mt-4 text-center text-zinc-500">
-                Nenhuma rescisão vencida ou vencendo nos próximos 7 dias.
-              </p>
-            )}
-          </div>
-        </div>
-
         <div className="mt-8 flex flex-wrap gap-3">
+          <button
+            onClick={() => setMostrarDashboard(true)}
+            className="rounded-lg bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
+          >
+            Dashboard de Prazos
+          </button>
+
           <button
             onClick={() => {
               setForm(formInicial);
@@ -1388,7 +1307,7 @@ export default function Home() {
           </button>
 
           <button
-            onClick={() => setMostrarConfigAlertas(!mostrarConfigAlertas)}
+            onClick={() => setMostrarConfigAlertas(true)}
             className="rounded-lg bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
           >
             Configurar Alertas
@@ -1458,8 +1377,118 @@ export default function Home() {
           </div>
         )}
 
+        {mostrarDashboard && (
+          <Modal onClose={() => setMostrarDashboard(false)}>
+            <div className="rounded-xl border border-orange-800 bg-zinc-900 p-6">
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-2xl font-bold text-orange-400">
+                    Dashboard de Prazos
+                  </h2>
+                  <p className="text-zinc-400">
+                    Acompanhe somente os prazos mais importantes das rescisões.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-zinc-800 px-4 py-2 text-sm font-bold text-zinc-300">
+                    {previsoesAlertas.length} alerta(s) previsto(s)
+                  </span>
+
+                  <button
+                    onClick={() => setMostrarDashboard(false)}
+                    className="rounded-lg bg-red-600 px-4 py-2 font-bold hover:bg-red-700"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                <div className="rounded-xl border border-red-800 bg-zinc-950 p-5">
+                  <p className="text-sm text-zinc-400">Vencidos</p>
+                  <p className="mt-2 text-3xl font-bold text-red-400">
+                    {rescisoesVencidas.length}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-yellow-700 bg-zinc-950 p-5">
+                  <p className="text-sm text-zinc-400">Vencem hoje</p>
+                  <p className="mt-2 text-3xl font-bold text-yellow-400">
+                    {rescisoesVencemHoje.length}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-orange-700 bg-zinc-950 p-5">
+                  <p className="text-sm text-zinc-400">1 dia</p>
+                  <p className="mt-2 text-3xl font-bold text-orange-400">
+                    {rescisoesVencemEm1Dia.length}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-blue-700 bg-zinc-950 p-5">
+                  <p className="text-sm text-zinc-400">2 dias</p>
+                  <p className="mt-2 text-3xl font-bold text-blue-400">
+                    {rescisoesVencemEm2Dias.length}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-emerald-700 bg-zinc-950 p-5">
+                  <p className="text-sm text-zinc-400">4 dias</p>
+                  <p className="mt-2 text-3xl font-bold text-emerald-400">
+                    {rescisoesVencemEm4Dias.length}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-zinc-800 text-left">
+                      <th className="p-4">Matrícula</th>
+                      <th className="p-4">Nome</th>
+                      <th className="p-4">Empresa</th>
+                      <th className="p-4">Pagamento</th>
+                      <th className="p-4">Prazo</th>
+                      <th className="p-4">Status</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {rescisoesCriticas.map((r) => (
+                      <tr key={r.id} className="border-b border-zinc-800">
+                        <td className="p-4">{r.matricula}</td>
+                        <td className="p-4 font-bold">{r.Nome}</td>
+                        <td className="p-4">{r.Empresa}</td>
+                        <td className="p-4">{r.prazo_pagamento || "-"}</td>
+                        <td className="p-4">
+                          <span
+                            className={`rounded-full px-3 py-1 text-sm font-bold ${classePrazo(
+                              r.prazo_pagamento
+                            )}`}
+                          >
+                            {textoPrazo(r.prazo_pagamento)}
+                          </span>
+                        </td>
+                        <td className="p-4">{r.status || "Pendente"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {rescisoesCriticas.length === 0 && (
+                  <p className="mt-4 text-center text-zinc-500">
+                    Nenhuma rescisão vencida, vencendo hoje, em 1 dia, em 2 dias ou em 4 dias.
+                  </p>
+                )}
+              </div>
+            </div>
+          </Modal>
+        )}
+
         {mostrarConfigAlertas && (
-          <div className="mt-6 rounded-xl border border-orange-800 bg-zinc-900 p-6">
+          <Modal onClose={() => setMostrarConfigAlertas(false)}>
+            <div className="rounded-xl border border-orange-800 bg-zinc-900 p-6">
             <div className="mb-6">
               <h2 className="text-xl font-bold text-orange-400">
                 Configurar Alertas
@@ -1637,7 +1666,8 @@ export default function Home() {
                 ))}
               </div>
             </div>
-          </div>
+            </div>
+          </Modal>
         )}
 
         <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
