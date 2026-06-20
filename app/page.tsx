@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import Image from "next/image";
 import { supabase } from "./supabase";
 
 type AndamentoItem = {
@@ -15,6 +16,11 @@ type AndamentoItem = {
 type ChecklistPadrao = {
   id: number;
   titulo: string;
+};
+
+type MensagemChat = {
+  autor: "usuario" | "assistente";
+  texto: string;
 };
 
 type AlertaPagamento = {
@@ -211,6 +217,17 @@ export default function Home() {
   const [filtroStatus, setFiltroStatus] = useState("Todos");
   const [busca, setBusca] = useState("");
 
+  const [chatAberto, setChatAberto] = useState(false);
+  const [mensagemChat, setMensagemChat] = useState("");
+  const [carregandoChat, setCarregandoChat] = useState(false);
+  const [mensagensChat, setMensagensChat] = useState<MensagemChat[]>([
+    {
+      autor: "assistente",
+      texto:
+        "Olá! Sou a Líder IA, sua assistente virtual especializada em Departamento Pessoal e Rescisões. Posso ajudar com rescisão CLT, aviso prévio, FGTS, seguro-desemprego, férias, 13º salário, eSocial, homologação, cálculos trabalhistas e legislação trabalhista.",
+    },
+  ]);
+
   async function entrar() {
     if (!loginEmail.trim() || !loginSenha.trim()) {
       alert("Informe o email e a senha.");
@@ -246,6 +263,63 @@ export default function Home() {
     setMostrarRelatorio(false);
     setMostrarDashboard(false);
     setMostrarConfigAlertas(false);
+    setChatAberto(false);
+  }
+
+
+  async function enviarMensagemChat(textoOpcional?: string) {
+    const texto = (textoOpcional || mensagemChat).trim();
+
+    if (!texto || carregandoChat) return;
+
+    setMensagensChat((mensagens) => [
+      ...mensagens,
+      {
+        autor: "usuario",
+        texto,
+      },
+    ]);
+
+    setMensagemChat("");
+    setCarregandoChat(true);
+
+    try {
+      const resposta = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mensagem: texto,
+        }),
+      });
+
+      const dados = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(dados?.error || "Erro ao consultar a Líder IA.");
+      }
+
+      setMensagensChat((mensagens) => [
+        ...mensagens,
+        {
+          autor: "assistente",
+          texto: dados.resposta || "Não consegui gerar uma resposta agora.",
+        },
+      ]);
+    } catch (error: any) {
+      setMensagensChat((mensagens) => [
+        ...mensagens,
+        {
+          autor: "assistente",
+          texto:
+            error?.message ||
+            "Não consegui responder agora. Verifique a API da OpenAI e tente novamente.",
+        },
+      ]);
+    } finally {
+      setCarregandoChat(false);
+    }
   }
 
   function formatarData(data: Date) {
@@ -1249,7 +1323,7 @@ export default function Home() {
             <h1 className="text-4xl font-bold">
               Rescisões Líder
             </h1>
-            <p className="mt-2 text-zinc-400">Bem-vindo ao sistema, Rennan.</p>
+            <p className="mt-2 text-zinc-400">Controle inteligente de rescisões com apoio da Líder IA.</p>
           </div>
 
           <button
@@ -2372,6 +2446,142 @@ export default function Home() {
             </div>
           </Modal>
         )}
+
+        {chatAberto && (
+          <div
+            translate="no"
+            className="notranslate fixed bottom-28 right-6 z-50 flex h-[620px] w-[420px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-blue-800 bg-zinc-950 shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-blue-700 bg-black">
+                  <Image
+                    src="/lider-ia.png"
+                    alt="Líder IA"
+                    width={48}
+                    height={48}
+                    className="h-12 w-12 object-cover object-top"
+                  />
+                </div>
+
+                <div>
+                  <h2 className="text-lg font-bold text-white">Líder IA</h2>
+                  <p className="text-xs text-zinc-400">
+                    Especialista em RH e Departamento Pessoal
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setChatAberto(false)}
+                className="rounded-lg bg-zinc-800 px-3 py-2 text-sm font-bold text-white hover:bg-zinc-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-3 overflow-y-auto p-4">
+              {mensagensChat.map((mensagem, index) => (
+                <div
+                  key={index}
+                  className={`flex ${
+                    mensagem.autor === "usuario" ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                      mensagem.autor === "usuario"
+                        ? "bg-blue-600 text-white"
+                        : "border border-zinc-800 bg-zinc-900 text-zinc-200"
+                    }`}
+                  >
+                    {mensagem.texto}
+                  </div>
+                </div>
+              ))}
+
+              {carregandoChat && (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-400">
+                    Líder IA está digitando...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-zinc-800 bg-zinc-900 p-4">
+              <div className="mb-3 flex flex-wrap gap-2">
+                {[
+                  "Como calcular rescisão?",
+                  "Aviso prévio",
+                  "Seguro-desemprego",
+                  "FGTS",
+                  "Férias",
+                  "eSocial",
+                ].map((sugestao) => (
+                  <button
+                    key={sugestao}
+                    onClick={() => enviarMensagemChat(sugestao)}
+                    disabled={carregandoChat}
+                    className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs font-bold text-zinc-300 hover:border-blue-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {sugestao}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <textarea
+                  value={mensagemChat}
+                  onChange={(e) => setMensagemChat(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      enviarMensagemChat();
+                    }
+                  }}
+                  placeholder="Digite sua dúvida para a Líder IA..."
+                  rows={2}
+                  className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-800 p-3 text-sm text-white outline-none focus:border-blue-500"
+                />
+
+                <button
+                  onClick={() => enviarMensagemChat()}
+                  disabled={carregandoChat || !mensagemChat.trim()}
+                  className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Enviar
+                </button>
+              </div>
+
+              <p className="mt-2 text-[11px] text-zinc-500">
+                Orientações gerais. Casos específicos podem depender de convenção coletiva, documentos e análise profissional.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={() => setChatAberto(true)}
+          className="fixed bottom-6 right-6 z-50 flex items-end gap-3 rounded-full bg-zinc-950/80 p-2 shadow-2xl ring-1 ring-blue-700 backdrop-blur transition hover:scale-105 hover:ring-blue-500"
+          title="Abrir Líder IA"
+        >
+          <div className="hidden rounded-full bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-lg md:block">
+            Líder IA
+          </div>
+
+          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-blue-600 bg-black shadow-xl">
+            <Image
+              src="/lider-ia.png"
+              alt="Líder IA"
+              width={96}
+              height={96}
+              priority
+              className="h-24 w-24 object-cover object-top"
+            />
+          </div>
+        </button>
+
       </div>
     </main>
   );
