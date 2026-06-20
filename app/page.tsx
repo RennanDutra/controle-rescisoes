@@ -1282,13 +1282,6 @@ export default function Home() {
 
         <div className="mt-8 flex flex-wrap gap-3">
           <button
-            onClick={() => setMostrarDashboard(true)}
-            className="rounded-lg bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
-          >
-            Dashboard de Prazos
-          </button>
-
-          <button
             onClick={() => {
               setForm(formInicial);
               setEditandoId(null);
@@ -1321,6 +1314,13 @@ export default function Home() {
             className="rounded-lg bg-emerald-600 px-5 py-3 font-bold text-white hover:bg-emerald-700"
           >
             Relatório de Pagamentos
+          </button>
+
+          <button
+            onClick={() => setMostrarDashboard(true)}
+            className="rounded-lg bg-zinc-700 px-5 py-3 font-bold text-white hover:bg-zinc-600"
+          >
+            Dashboard de Prazos
           </button>
         </div>
 
