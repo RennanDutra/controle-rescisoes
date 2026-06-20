@@ -224,7 +224,7 @@ export default function Home() {
     {
       autor: "assistente",
       texto:
-        "Olá! Sou a Líder IA, sua assistente virtual especializada em Departamento Pessoal e Rescisões. Posso ajudar com rescisão CLT, aviso prévio, FGTS, seguro-desemprego, férias, 13º salário, eSocial, homologação, cálculos trabalhistas e legislação trabalhista.",
+        "Olá! Sou a Líder IA, sua assistente virtual especializada em Departamento Pessoal. Posso ajudar com qualquer dúvida sobre o seu DP.",
     },
   ]);
 
@@ -2563,22 +2563,28 @@ export default function Home() {
 
         <button
           onClick={() => setChatAberto(true)}
-          className="fixed bottom-6 right-6 z-50 flex items-end gap-3 rounded-full bg-zinc-950/80 p-2 shadow-2xl ring-1 ring-blue-700 backdrop-blur transition hover:scale-105 hover:ring-blue-500"
+          className="group fixed bottom-6 right-6 z-50"
           title="Abrir Líder IA"
         >
-          <div className="hidden rounded-full bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-lg md:block">
-            Líder IA
+          <div className="relative h-20 w-20 rounded-full bg-blue-600/20 p-1 shadow-[0_0_30px_rgba(37,99,235,0.65)] transition-all duration-300 group-hover:scale-110 group-hover:shadow-[0_0_40px_rgba(59,130,246,0.9)]">
+            <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full border-2 border-blue-500 bg-black">
+              <Image
+                src="/lider-ia.png"
+                alt="Líder IA"
+                width={80}
+                height={80}
+                priority
+                className="h-full w-full object-cover object-top"
+              />
+
+              <div className="absolute inset-0 rounded-full bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+            </div>
+
+            <div className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-black bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.9)]" />
           </div>
 
-          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-blue-600 bg-black shadow-xl">
-            <Image
-              src="/lider-ia.png"
-              alt="Líder IA"
-              width={96}
-              height={96}
-              priority
-              className="h-24 w-24 object-cover object-top"
-            />
+          <div className="absolute right-24 top-1/2 hidden -translate-y-1/2 whitespace-nowrap rounded-xl border border-blue-600 bg-zinc-950 px-4 py-2 text-sm font-bold text-white opacity-0 shadow-xl transition-all duration-300 group-hover:opacity-100 md:block">
+            🤖 Líder IA
           </div>
         </button>
 
