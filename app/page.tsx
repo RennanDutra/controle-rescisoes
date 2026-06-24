@@ -64,6 +64,64 @@ type Rescisao = {
 
 const statusOpcoes = ["Pendente", "Em cálculo", "Finalizado"];
 
+const checklistAutomaticoPorDesligamento: Record<string, string[]> = {
+  "Dispensa sem justa causa": [
+    "Aviso Prévio",
+    "ASO",
+    "FGTS",
+    "Seguro Desemprego",
+    "Kit Demissional",
+    "Homologação",
+  ],
+  "Pedido de demissão": [
+    "Aviso Prévio",
+    "ASO",
+    "Kit Demissional",
+    "Homologação",
+  ],
+  "Término de contrato de experiência": [
+    "ASO",
+    "FGTS",
+    "Kit Demissional",
+    "Homologação",
+  ],
+  "Rescisão antecipada pelo empregador": [
+    "Aviso Prévio",
+    "ASO",
+    "FGTS",
+    "Seguro Desemprego",
+    "Kit Demissional",
+    "Homologação",
+  ],
+  "Rescisão antecipada pelo empregado": [
+    "Aviso Prévio",
+    "ASO",
+    "Kit Demissional",
+    "Homologação",
+  ],
+  "Acordo entre as partes": [
+    "Aviso Prévio",
+    "ASO",
+    "FGTS",
+    "Kit Demissional",
+    "Homologação",
+  ],
+  "Dispensa por justa causa": [
+    "ASO",
+    "Kit Demissional",
+    "Homologação",
+  ],
+  "Rescisão indireta": [
+    "Aviso Prévio",
+    "ASO",
+    "FGTS",
+    "Seguro Desemprego",
+    "Kit Demissional",
+    "Homologação",
+  ],
+};
+
+
 const tiposDesligamentoIniciais = [
   "Dispensa sem justa causa",
   "Pedido de demissão",
@@ -407,6 +465,40 @@ export default function Home() {
     return "bg-green-600 text-white";
   }
 
+
+  function statusSemaforo(rescisao: Rescisao) {
+    const dias = diferencaDiasAtePrazo(rescisao.prazo_pagamento);
+
+    if (dias !== null && dias < 0) {
+      return {
+        texto: "Atrasado",
+        classe: "bg-red-600 text-white",
+        borda: "border-l-4 border-l-red-600",
+      };
+    }
+
+    const andamento = Array.isArray(rescisao.andamento)
+      ? rescisao.andamento
+      : [];
+
+    const total = andamento.length;
+    const concluidos = andamento.filter((item) => item.feito).length;
+
+    if (total > 0 && concluidos === total) {
+      return {
+        texto: "Concluído",
+        classe: "bg-green-600 text-white",
+        borda: "border-l-4 border-l-green-600",
+      };
+    }
+
+    return {
+      texto: "Pendente",
+      classe: "bg-yellow-500 text-black",
+      borda: "border-l-4 border-l-yellow-500",
+    };
+  }
+
   function alertaCombinaComRescisao(alerta: AlertaPagamento, rescisao: Rescisao) {
     if (!alerta.ativo) return false;
 
@@ -442,6 +534,31 @@ export default function Home() {
       titulo: item.titulo,
       feito: false,
     }));
+  }
+
+
+  function gerarChecklistAutomatico(tipoDesligamento: string) {
+    const tipo = String(tipoDesligamento || "").trim();
+    const itensAutomaticos = checklistAutomaticoPorDesligamento[tipo];
+
+    if (!itensAutomaticos || itensAutomaticos.length === 0) {
+      return gerarChecklistPadrao();
+    }
+
+    return itensAutomaticos.map((titulo) => ({
+      titulo,
+      feito: false,
+    }));
+  }
+
+  function gerarChecklistInicial() {
+    const checklistAutomatico = gerarChecklistAutomatico(form.tipo_desligamento);
+
+    if (checklistAutomatico.length > 0) {
+      return checklistAutomatico;
+    }
+
+    return gerarChecklistPadrao();
   }
 
   function atualizarCampo(campo: string, valor: string) {
@@ -993,7 +1110,7 @@ export default function Home() {
   async function cadastrarRescisao() {
     const dados = {
       ...dadosFormularioParaSalvar("Pendente"),
-      andamento: gerarChecklistPadrao(),
+      andamento: gerarChecklistInicial(),
       valor_liquido: 0,
       valor_fgts: 0,
     };
@@ -1666,6 +1783,7 @@ export default function Home() {
                       <th className="p-4">Empresa</th>
                       <th className="p-4">Pagamento</th>
                       <th className="p-4">Prazo</th>
+                      <th className="p-4">Semáforo</th>
                       <th className="p-4">Status</th>
                     </tr>
                   </thead>
@@ -1684,6 +1802,13 @@ export default function Home() {
                             )}`}
                           >
                             {textoPrazo(r.prazo_pagamento)}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <span
+                            className={`rounded-full px-3 py-1 text-sm font-bold ${statusSemaforo(r).classe}`}
+                          >
+                            {statusSemaforo(r).texto}
                           </span>
                         </td>
                         <td className="p-4">{r.status || "Pendente"}</td>
@@ -2046,6 +2171,7 @@ export default function Home() {
                   <th className="p-4">Demissão</th>
                   <th className="p-4">Pagamento</th>
                   <th className="p-4">Status</th>
+                  <th className="p-4">Semáforo</th>
                   <th className="p-4">Andamento</th>
                   <th className="p-4">Valores</th>
                   <th className="p-4">Ações</th>
@@ -2056,7 +2182,7 @@ export default function Home() {
                 {rescisoesFiltradas.map((r) => (
                   <tr
                     key={r.id}
-                    className="border-b border-zinc-800 hover:bg-zinc-800"
+                    className={`border-b border-zinc-800 hover:bg-zinc-800 ${statusSemaforo(r).borda}`}
                   >
                     <td className="p-4">{r.Empresa}</td>
                     <td className="p-4">{r.matricula}</td>
@@ -2066,6 +2192,13 @@ export default function Home() {
                     <td className="p-4">
                       <span className="rounded-full bg-zinc-800 px-3 py-1 text-sm font-bold text-white">
                         {r.status || "Pendente"}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span
+                        className={`rounded-full px-3 py-1 text-sm font-bold ${statusSemaforo(r).classe}`}
+                      >
+                        {statusSemaforo(r).texto}
                       </span>
                     </td>
                     <td className="p-4 font-bold text-blue-400">
