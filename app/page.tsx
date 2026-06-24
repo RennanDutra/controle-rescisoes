@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import Image from "next/image";
 import { supabase } from "./supabase";
 
 type AndamentoItem = {
@@ -16,11 +15,6 @@ type AndamentoItem = {
 type ChecklistPadrao = {
   id: number;
   titulo: string;
-};
-
-type MensagemChat = {
-  autor: "usuario" | "assistente";
-  texto: string;
 };
 
 type AlertaPagamento = {
@@ -69,6 +63,23 @@ type Rescisao = {
 };
 
 const statusOpcoes = ["Pendente", "Em cálculo", "Finalizado"];
+
+const tiposDesligamentoIniciais = [
+  "Dispensa sem justa causa",
+  "Pedido de demissão",
+  "Término de contrato de experiência",
+  "Rescisão antecipada pelo empregador",
+  "Rescisão antecipada pelo empregado",
+  "Acordo entre as partes",
+  "Dispensa por justa causa",
+  "Rescisão indireta",
+];
+
+const opcoesReducaoAviso = [
+  "Não haverá redução",
+  "Redução de 7 dias",
+  "Redução de 2h diárias",
+];
 
 const motivosAlerta = [
   "Prazo de pagamento",
@@ -121,7 +132,9 @@ const formInicial = {
   data_desligamento: "",
   prazo_pagamento: "",
   tipo_desligamento: "",
-  cumprimento_aviso: "",
+  cumprimento_aviso: "Não",
+  dia_cumprimento: "",
+  reducao_aviso: "Não haverá redução",
   funcao: "",
   salario: "",
   plano_saude: "Não",
@@ -217,16 +230,12 @@ export default function Home() {
   const [filtroStatus, setFiltroStatus] = useState("Todos");
   const [busca, setBusca] = useState("");
 
-  const [chatAberto, setChatAberto] = useState(false);
-  const [mensagemChat, setMensagemChat] = useState("");
-  const [carregandoChat, setCarregandoChat] = useState(false);
-  const [mensagensChat, setMensagensChat] = useState<MensagemChat[]>([
-    {
-      autor: "assistente",
-      texto:
-        "Olá! Sou o Líder IA.\n\nEstou aqui para ajudar com dúvidas sobre as rotinas de Departamento Pessoal.\n\nComo posso ajudar você hoje?",
-    },
-  ]);
+  const [opcoesTipoDesligamento, setOpcoesTipoDesligamento] = useState<string[]>(
+    tiposDesligamentoIniciais
+  );
+  const [novoTipoDesligamento, setNovoTipoDesligamento] = useState("");
+  const [mostrarTiposDesligamento, setMostrarTiposDesligamento] =
+    useState(false);
 
   async function entrar() {
     if (!loginEmail.trim() || !loginSenha.trim()) {
@@ -263,64 +272,8 @@ export default function Home() {
     setMostrarRelatorio(false);
     setMostrarDashboard(false);
     setMostrarConfigAlertas(false);
-    setChatAberto(false);
   }
 
-
-  async function enviarMensagemChat(textoOpcional?: string) {
-    const texto = (textoOpcional || mensagemChat).trim();
-
-    if (!texto || carregandoChat) return;
-
-    setMensagensChat((mensagens) => [
-      ...mensagens,
-      {
-        autor: "usuario",
-        texto,
-      },
-    ]);
-
-    setMensagemChat("");
-    setCarregandoChat(true);
-
-    try {
-      const resposta = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mensagem: texto,
-        }),
-      });
-
-      const dados = await resposta.json();
-
-      if (!resposta.ok) {
-        throw new Error(dados?.error || "Erro ao consultar a Líder IA.");
-      }
-
-      setMensagensChat((mensagens) => [
-        ...mensagens,
-        {
-          autor: "assistente",
-          texto: dados.resposta || "Não consegui gerar uma resposta agora.",
-        },
-      ]);
-    } catch (error: any) {
-      setMensagensChat((mensagens) => [
-        ...mensagens,
-        {
-          autor: "assistente",
-          texto:
-            error?.message ||
-            "Não consegui responder agora. Verifique a API da OpenAI e tente novamente.",
-        },
-      ]);
-    } finally {
-      setCarregandoChat(false);
-    }
-  }
 
   function formatarData(data: Date) {
     const ano = data.getFullYear();
@@ -469,7 +422,100 @@ export default function Home() {
       novoForm.data_agendamento_aso = "";
     }
 
+    if (campo === "cumprimento_aviso" && valor === "Não") {
+      (novoForm as any).dia_cumprimento = "";
+      (novoForm as any).reducao_aviso = "Não haverá redução";
+    }
+
     setForm(novoForm);
+  }
+
+  function montarCumprimentoAviso() {
+    if (form.cumprimento_aviso !== "Sim") return "Não";
+
+    const partes = ["Sim"];
+
+    if ((form as any).dia_cumprimento) {
+      partes.push(`Dia do cumprimento: ${(form as any).dia_cumprimento}`);
+    }
+
+    if ((form as any).reducao_aviso) {
+      partes.push(`Redução: ${(form as any).reducao_aviso}`);
+    }
+
+    return partes.join(" | ");
+  }
+
+  function extrairCumprimentoAviso(valor: string) {
+    const texto = String(valor || "");
+
+    if (!texto || texto === "Não") {
+      return {
+        cumprimento: "Não",
+        dia: "",
+        reducao: "Não haverá redução",
+      };
+    }
+
+    const dia = texto.match(/Dia do cumprimento: ([^|]+)/)?.[1]?.trim() || "";
+    const reducao =
+      texto.match(/Redução: ([^|]+)/)?.[1]?.trim() || "Não haverá redução";
+
+    return {
+      cumprimento: texto.startsWith("Sim") ? "Sim" : texto,
+      dia,
+      reducao,
+    };
+  }
+
+  function dadosFormularioParaSalvar(status?: string) {
+    const {
+      dia_cumprimento,
+      reducao_aviso,
+      ...dadosBase
+    } = form as any;
+
+    return {
+      ...dadosBase,
+      cumprimento_aviso: montarCumprimentoAviso(),
+      salario: form.salario === "" ? null : Number(form.salario),
+      ...(status ? { status } : {}),
+    };
+  }
+
+  function adicionarTipoDesligamento() {
+    const novoTipo = novoTipoDesligamento.trim();
+
+    if (!novoTipo) return;
+
+    if (
+      opcoesTipoDesligamento.some(
+        (tipo) => tipo.toLowerCase() === novoTipo.toLowerCase()
+      )
+    ) {
+      alert("Este tipo de desligamento já está cadastrado.");
+      return;
+    }
+
+    const novasOpcoes = [...opcoesTipoDesligamento, novoTipo].sort((a, b) =>
+      a.localeCompare(b)
+    );
+
+    setOpcoesTipoDesligamento(novasOpcoes);
+    setNovoTipoDesligamento("");
+  }
+
+  function removerTipoDesligamento(tipo: string) {
+    const confirmar = confirm(`Deseja remover "${tipo}" da lista?`);
+    if (!confirmar) return;
+
+    const novasOpcoes = opcoesTipoDesligamento.filter((item) => item !== tipo);
+
+    setOpcoesTipoDesligamento(novasOpcoes);
+
+    if (form.tipo_desligamento === tipo) {
+      atualizarCampo("tipo_desligamento", "");
+    }
   }
 
   function criarAbasPagamento() {
@@ -902,9 +948,7 @@ export default function Home() {
 
   async function cadastrarRescisao() {
     const dados = {
-      ...form,
-      salario: form.salario === "" ? null : Number(form.salario),
-      status: "Pendente",
+      ...dadosFormularioParaSalvar("Pendente"),
       andamento: gerarChecklistPadrao(),
       valor_liquido: 0,
       valor_fgts: 0,
@@ -925,6 +969,8 @@ export default function Home() {
   function iniciarEdicao(rescisao: Rescisao) {
     setEditandoId(rescisao.id || null);
 
+    const aviso = extrairCumprimentoAviso(rescisao.cumprimento_aviso || "");
+
     setForm({
       Empresa: rescisao.Empresa || "",
       matricula: rescisao.matricula || "",
@@ -934,7 +980,9 @@ export default function Home() {
       data_desligamento: rescisao.data_desligamento || "",
       prazo_pagamento: rescisao.prazo_pagamento || "",
       tipo_desligamento: rescisao.tipo_desligamento || "",
-      cumprimento_aviso: rescisao.cumprimento_aviso || "",
+      cumprimento_aviso: aviso.cumprimento,
+      dia_cumprimento: aviso.dia,
+      reducao_aviso: aviso.reducao,
       funcao: rescisao.funcao || "",
       salario: rescisao.salario ? String(rescisao.salario) : "",
       plano_saude: rescisao.plano_saude || "Não",
@@ -961,10 +1009,7 @@ export default function Home() {
   async function salvarEdicao() {
     if (!editandoId) return;
 
-    const dados = {
-      ...form,
-      salario: form.salario === "" ? null : Number(form.salario),
-    };
+    const dados = dadosFormularioParaSalvar();
 
     const { error } = await supabase
       .from("rescisoes")
@@ -1226,6 +1271,29 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const tiposSalvos = localStorage.getItem("tipos_desligamento_rescisoes_lider");
+
+    if (tiposSalvos) {
+      try {
+        const tipos = JSON.parse(tiposSalvos);
+
+        if (Array.isArray(tipos) && tipos.length > 0) {
+          setOpcoesTipoDesligamento(tipos);
+        }
+      } catch {
+        setOpcoesTipoDesligamento(tiposDesligamentoIniciais);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "tipos_desligamento_rescisoes_lider",
+      JSON.stringify(opcoesTipoDesligamento)
+    );
+  }, [opcoesTipoDesligamento]);
+
+  useEffect(() => {
     async function verificarSessao() {
       const { data } = await supabase.auth.getSession();
 
@@ -1323,7 +1391,7 @@ export default function Home() {
             <h1 className="text-4xl font-bold">
               Rescisões Líder
             </h1>
-            <p className="mt-2 text-zinc-400">Controle inteligente de rescisões com apoio da Líder IA.</p>
+            <p className="mt-2 text-zinc-400">Controle inteligente de rescisões.</p>
           </div>
 
           <button
@@ -1769,6 +1837,73 @@ export default function Home() {
           </Modal>
         )}
 
+        {mostrarTiposDesligamento && (
+          <Modal onClose={() => setMostrarTiposDesligamento(false)}>
+            <div className="rounded-xl border border-blue-800 bg-zinc-900 p-6">
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-2xl font-bold text-blue-400">
+                    Tipos de Desligamento
+                  </h2>
+                  <p className="text-zinc-400">
+                    Cadastre as opções que aparecerão na lista suspensa da nova rescisão.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setMostrarTiposDesligamento(false)}
+                  className="rounded-lg bg-red-600 px-4 py-2 font-bold hover:bg-red-700"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <div className="mb-6 flex flex-col gap-2 md:flex-row">
+                <input
+                  value={novoTipoDesligamento}
+                  onChange={(e) => setNovoTipoDesligamento(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") adicionarTipoDesligamento();
+                  }}
+                  placeholder="Ex: Dispensa sem justa causa"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-blue-500"
+                />
+
+                <button
+                  onClick={adicionarTipoDesligamento}
+                  className="rounded-lg bg-blue-600 px-5 py-3 font-bold hover:bg-blue-700"
+                >
+                  Adicionar
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {opcoesTipoDesligamento.length === 0 && (
+                  <p className="text-zinc-500">
+                    Nenhum tipo de desligamento cadastrado.
+                  </p>
+                )}
+
+                {opcoesTipoDesligamento.map((tipo) => (
+                  <div
+                    key={tipo}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-4"
+                  >
+                    <span className="font-bold">{tipo}</span>
+
+                    <button
+                      onClick={() => removerTipoDesligamento(tipo)}
+                      className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold hover:bg-red-700"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Modal>
+        )}
+
         <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
           <h2 className="mb-4 text-xl font-bold">Rescisões Cadastradas</h2>
 
@@ -1964,8 +2099,50 @@ export default function Home() {
                 {input("data_admissao", "Admissão", "date")}
                 {input("data_desligamento", "Demissão", "date")}
                 {input("prazo_pagamento", "Pagamento", "date")}
-                {input("tipo_desligamento", "Tipo de Desligamento")}
-                {input("cumprimento_aviso", "Cumprimento do Aviso")}
+                <div>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <label className="block text-sm text-zinc-400">
+                      Tipo de Desligamento
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMostrarTiposDesligamento(!mostrarTiposDesligamento)
+                      }
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300"
+                    >
+                      Cadastrar opções
+                    </button>
+                  </div>
+
+                  <select
+                    value={form.tipo_desligamento}
+                    onChange={(e) =>
+                      atualizarCampo("tipo_desligamento", e.target.value)
+                    }
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-blue-500"
+                  >
+                    <option value="">Selecione</option>
+                    {opcoesTipoDesligamento.map((opcao) => (
+                      <option key={opcao} value={opcao}>
+                        {opcao}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {select("cumprimento_aviso", "Cumprimento do Aviso", [
+                  "Não",
+                  "Sim",
+                ])}
+
+                {form.cumprimento_aviso === "Sim" &&
+                  input("dia_cumprimento", "Dia do cumprimento", "date")}
+
+                {form.cumprimento_aviso === "Sim" &&
+                  select("reducao_aviso", "Redução", opcoesReducaoAviso)}
+
                 {input("funcao", "Função")}
                 {input("salario", "Salário", "number")}
 
@@ -2446,147 +2623,6 @@ export default function Home() {
             </div>
           </Modal>
         )}
-
-        {chatAberto && (
-          <div
-            translate="no"
-            className="notranslate fixed bottom-28 right-6 z-50 flex h-[620px] w-[420px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-blue-800 bg-zinc-950 shadow-2xl"
-          >
-            <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-blue-700 bg-black">
-                  <Image
-                    src="/lider-ia.png"
-                    alt="Líder IA"
-                    width={48}
-                    height={48}
-                    className="h-12 w-12 object-cover object-top"
-                  />
-                </div>
-
-                <div>
-                  <h2 className="text-lg font-bold text-white">Líder IA</h2>
-                  <p className="text-xs text-zinc-400">
-                    Assistente Inteligente de Departamento Pessoal
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setChatAberto(false)}
-                className="rounded-lg bg-zinc-800 px-3 py-2 text-sm font-bold text-white hover:bg-zinc-700"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 space-y-3 overflow-y-auto p-4">
-              {mensagensChat.map((mensagem, index) => (
-                <div
-                  key={index}
-                  className={`flex ${
-                    mensagem.autor === "usuario" ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  <div
-                    className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                      mensagem.autor === "usuario"
-                        ? "bg-blue-600 text-white"
-                        : "border border-zinc-800 bg-zinc-900 text-zinc-200"
-                    }`}
-                  >
-                    {mensagem.texto}
-                  </div>
-                </div>
-              ))}
-
-              {carregandoChat && (
-                <div className="flex justify-start">
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-400">
-                    Líder IA está digitando...
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-zinc-800 bg-zinc-900 p-4">
-              <div className="mb-3 flex flex-wrap gap-2">
-                {[
-                  "Como calcular rescisão?",
-                  "Aviso prévio",
-                  "Seguro-desemprego",
-                  "FGTS",
-                  "Férias",
-                  "eSocial",
-                ].map((sugestao) => (
-                  <button
-                    key={sugestao}
-                    onClick={() => enviarMensagemChat(sugestao)}
-                    disabled={carregandoChat}
-                    className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs font-bold text-zinc-300 hover:border-blue-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {sugestao}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex gap-2">
-                <textarea
-                  value={mensagemChat}
-                  onChange={(e) => setMensagemChat(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      enviarMensagemChat();
-                    }
-                  }}
-                  placeholder="Digite sua dúvida para o Líder IA..."
-                  rows={2}
-                  className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-800 p-3 text-sm text-white outline-none focus:border-blue-500"
-                />
-
-                <button
-                  onClick={() => enviarMensagemChat()}
-                  disabled={carregandoChat || !mensagemChat.trim()}
-                  className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Enviar
-                </button>
-              </div>
-
-              <p className="mt-2 text-[11px] text-zinc-500">
-                Orientações gerais. Casos específicos podem depender de convenção coletiva, documentos e análise profissional.
-              </p>
-            </div>
-          </div>
-        )}
-
-        <button
-          onClick={() => setChatAberto(true)}
-          className="group fixed bottom-6 right-6 z-50"
-          title="Abrir Líder IA"
-        >
-          <div className="relative h-20 w-20 rounded-full bg-blue-600/20 p-1 shadow-[0_0_30px_rgba(37,99,235,0.65)] transition-all duration-300 group-hover:scale-110 group-hover:shadow-[0_0_40px_rgba(59,130,246,0.9)]">
-            <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full border-2 border-blue-500 bg-black">
-              <Image
-                src="/lider-ia.png"
-                alt="Líder IA"
-                width={80}
-                height={80}
-                priority
-                className="h-full w-full object-cover object-top"
-              />
-
-              <div className="absolute inset-0 rounded-full bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-            </div>
-
-            <div className="absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-black bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.9)]" />
-          </div>
-
-          <div className="absolute right-24 top-1/2 hidden -translate-y-1/2 whitespace-nowrap rounded-xl border border-blue-600 bg-zinc-950 px-4 py-2 text-sm font-bold text-white opacity-0 shadow-xl transition-all duration-300 group-hover:opacity-100 md:block">
-            🤖 Líder IA
-          </div>
-        </button>
 
       </div>
     </main>
