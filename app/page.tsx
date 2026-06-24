@@ -179,6 +179,30 @@ function Modal({
   );
 }
 
+function ModalFrente({
+  children,
+  onClose,
+}: {
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      translate="no"
+      className="notranslate fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      <div
+        translate="no"
+        className="notranslate max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-blue-700 bg-zinc-900 p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const relatorioPDFRef = useRef<HTMLDivElement | null>(null);
 
@@ -302,6 +326,26 @@ export default function Home() {
     const numero = Number(limpo);
 
     return isNaN(numero) ? 0 : numero;
+  }
+
+  function formatarValorEmReal(valor: string) {
+    const somenteNumeros = valor.replace(/\D/g, "");
+
+    if (!somenteNumeros) return "";
+
+    const numero = Number(somenteNumeros) / 100;
+
+    return numero.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  }
+
+  function atualizarSalario(valor: string) {
+    setForm({
+      ...form,
+      salario: formatarValorEmReal(valor),
+    });
   }
 
   function ehFimDeSemana(data: Date) {
@@ -478,7 +522,7 @@ export default function Home() {
     return {
       ...dadosBase,
       cumprimento_aviso: montarCumprimentoAviso(),
-      salario: form.salario === "" ? null : Number(form.salario),
+      salario: form.salario === "" ? null : converterValor(form.salario),
       ...(status ? { status } : {}),
     };
   }
@@ -984,7 +1028,12 @@ export default function Home() {
       dia_cumprimento: aviso.dia,
       reducao_aviso: aviso.reducao,
       funcao: rescisao.funcao || "",
-      salario: rescisao.salario ? String(rescisao.salario) : "",
+      salario: rescisao.salario
+        ? Number(rescisao.salario).toLocaleString("pt-BR", {
+            style: "currency",
+            currency: "BRL",
+          })
+        : "",
       plano_saude: rescisao.plano_saude || "Não",
       observacao_plano_saude: rescisao.observacao_plano_saude || "",
       plano_odonto: rescisao.plano_odonto || "Não",
@@ -1838,7 +1887,7 @@ export default function Home() {
         )}
 
         {mostrarTiposDesligamento && (
-          <Modal onClose={() => setMostrarTiposDesligamento(false)}>
+          <ModalFrente onClose={() => setMostrarTiposDesligamento(false)}>
             <div className="rounded-xl border border-blue-800 bg-zinc-900 p-6">
               <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -1901,7 +1950,7 @@ export default function Home() {
                 ))}
               </div>
             </div>
-          </Modal>
+          </ModalFrente>
         )}
 
         <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900 p-6">
@@ -2144,7 +2193,17 @@ export default function Home() {
                   select("reducao_aviso", "Redução", opcoesReducaoAviso)}
 
                 {input("funcao", "Função")}
-                {input("salario", "Salário", "number")}
+                <div>
+                  <label className="mb-1 block text-sm text-zinc-400">Salário</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.salario}
+                    onChange={(e) => atualizarSalario(e.target.value)}
+                    placeholder="R$ 0,00"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-blue-500"
+                  />
+                </div>
 
                 {select("plano_saude", "Plano de Saúde", ["Sim", "Não"])}
                 {form.plano_saude === "Sim" &&
@@ -2173,8 +2232,8 @@ export default function Home() {
                 {select("guia_sd", "Guia SD", ["Sim", "Não"])}
                 {select("fgts", "FGTS", ["Mensal", "Mensal + Multa"])}
                 {input("email", "Email", "email")}
-                {input("kit_demissional", "Kit Demissional")}
-                {input("homologacao", "Homologação")}
+                {input("kit_demissional", "Kit Demissional", "date")}
+                {input("homologacao", "Homologação", "date")}
 
                 <div className="md:col-span-3">
                   <label className="mb-1 block text-sm text-zinc-400">
@@ -2307,23 +2366,33 @@ export default function Home() {
                 </div>
               </div>
 
-              <div ref={relatorioPDFRef} className="rounded-xl bg-zinc-900 p-4">
-                <div className="mb-6">
-                  <label className="mb-2 block text-sm font-bold text-zinc-400">
-                    Filtrar relatório
-                  </label>
+              <div className="mb-6">
+                <label className="mb-2 block text-sm font-bold text-zinc-400">
+                  Filtrar relatório
+                </label>
 
-                  <select
-                    value={abaRelatorio}
-                    onChange={(e) => setAbaRelatorio(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-emerald-500"
-                  >
-                    {abasPagamento.map((aba) => (
-                      <option key={aba.chave} value={aba.chave}>
-                        {aba.nome}
-                      </option>
-                    ))}
-                  </select>
+                <select
+                  value={abaRelatorio}
+                  onChange={(e) => setAbaRelatorio(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-white outline-none focus:border-emerald-500"
+                >
+                  {abasPagamento.map((aba) => (
+                    <option key={aba.chave} value={aba.chave}>
+                      {aba.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div ref={relatorioPDFRef} className="rounded-xl bg-zinc-900 p-4">
+                <div className="mb-6 border-b border-zinc-800 pb-4">
+                  <h3 className="text-2xl font-bold text-white">Rescisões Líder</h3>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    Relatório financeiro de pagamentos
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Filtro aplicado: {abasPagamento.find((aba) => aba.chave === abaRelatorio)?.nome || abaRelatorio}
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -2563,7 +2632,7 @@ export default function Home() {
                   rescisaoSelecionada.cumprimento_aviso
                 )}
                 {detalhe("Função", rescisaoSelecionada.funcao)}
-                {detalhe("Salário", rescisaoSelecionada.salario)}
+                {detalhe("Salário", formatarMoeda(rescisaoSelecionada.salario))}
                 {detalhe("Plano de Saúde", rescisaoSelecionada.plano_saude)}
 
                 {rescisaoSelecionada.plano_saude === "Sim" &&
